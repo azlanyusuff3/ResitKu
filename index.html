@@ -7,13 +7,20 @@
 <title>ResitKu — Tracker Relief LHDN</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ResitKu">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
   <h1>🧾 ResitKu</h1>
-  <select id="yearSel"></select>
+  <div class="hright">
+    <button id="btnInstall" class="installbtn hidden">📲 Install</button>
+    <select id="yearSel"></select>
+  </div>
 </header>
 
 <main>
@@ -31,6 +38,7 @@
         <small id="rateInfo"></small>
       </div>
     </div>
+    <div id="installBanner" class="banner install hidden">📲 <b>Pasang ResitKu kat home screen</b> — buka macam app, data lebih selamat. <a href="#" id="installLink">Pasang sekarang</a> <a href="#" id="installDismiss" class="x">✕</a></div>
     <div id="countdown" class="banner"></div>
     <div id="backupWarn" class="banner warn hidden"></div>
     <h2>Baki ikut kategori</h2>
@@ -73,6 +81,7 @@
       <input id="income" type="number" inputmode="numeric" placeholder="cth: 80000">
     </label>
     <p class="note">Guna untuk anggar berapa cukai dijimat. Disimpan dalam phone ni je.</p>
+    <button id="btnInstall2" class="btn2 hidden">📲 Pasang app kat home screen</button>
     <h2>Backup & data</h2>
     <p class="note">Semua data & gambar resit simpan dalam phone ni sahaja. Takde server. Buat backup dan simpan di mana kau suka (Google Drive, OneDrive, WhatsApp diri sendiri...).</p>
     <button id="btnExport">📦 Backup (ZIP)</button>
@@ -92,10 +101,19 @@
 
 <div id="toast"></div>
 
+<div id="iosModal" class="modal hidden">
+  <div class="sheet">
+    <h3>📲 Pasang ResitKu</h3>
+    <div id="iosSteps"></div>
+    <button id="iosClose">Faham</button>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="reliefs.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
+<script src="install.js"></script>
 </body>
 </html>

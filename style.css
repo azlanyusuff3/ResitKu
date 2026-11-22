@@ -49,3 +49,13 @@ nav button span { display: block; font-size: 10px; } nav button.on { color: var(
   nav { background: #16201d; border-color: #374151; } .btn2 { background: #374151; color: #fff; }
   .banner { background: #12352d; } .banner.warn { background: #3d2f0b; } .thumb.none { background: #1f2937; }
 }
+
+.hright { display: flex; gap: 8px; align-items: center; }
+.installbtn { width: auto; margin: 0; padding: 6px 10px; font-size: 13px; background: #fff; color: var(--p); border-radius: 8px; }
+.banner.install { background: #ede9fe; position: relative; padding-right: 30px; }
+.banner.install .x { position: absolute; right: 10px; top: 8px; text-decoration: none; color: var(--mut); }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--card); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 20px max(20px, env(safe-area-inset-bottom)); }
+.sheet h3 { margin: 0 0 10px; } .sheet ol { padding-left: 20px; line-height: 1.8; font-size: 15px; }
+.sheet .ico { display: inline-block; background: #e5e7eb; border-radius: 6px; padding: 0 6px; color: #000; }
+@media (prefers-color-scheme: dark) { .banner.install { background: #2e1065; } }
