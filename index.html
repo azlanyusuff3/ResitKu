@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>ResitKu — Tracker Relief LHDN</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🧾 ResitKu</h1>
+  <select id="yearSel"></select>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <section id="view-dash" class="view active">
+    <div class="hero">
+      <div>
+        <small>Jumlah relief (bukan auto)</small>
+        <div class="big" id="totClaimed">RM0</div>
+        <small id="totLeft"></small>
+      </div>
+      <div class="save">
+        <small>Anggaran cukai dijimat</small>
+        <div class="big" id="taxSaved">RM0</div>
+        <small id="rateInfo"></small>
+      </div>
+    </div>
+    <div id="countdown" class="banner"></div>
+    <div id="backupWarn" class="banner warn hidden"></div>
+    <h2>Baki ikut kategori</h2>
+    <div id="cats"></div>
+    <p class="note" id="cfgNote"></p>
+  </section>
+
+  <!-- ADD -->
+  <section id="view-add" class="view">
+    <h2>Tambah resit</h2>
+    <label class="scanbtn">📷 Scan / pilih gambar resit
+      <input type="file" id="fileIn" accept="image/*" capture="environment" hidden>
+    </label>
+    <div id="ocrStatus" class="note"></div>
+    <img id="preview" class="hidden">
+    <form id="addForm">
+      <label>Kedai / penerangan <input id="fMerchant" required></label>
+      <label>Amaun (RM) <input id="fAmount" type="number" step="0.01" min="0" required inputmode="decimal"></label>
+      <label>Tarikh <input id="fDate" type="date" required></label>
+      <label>Kategori <select id="fCat"></select></label>
+      <label>Untuk siapa <select id="fFor">
+        <option>Diri</option><option>Pasangan</option><option>Anak</option><option>Ibu bapa</option>
+      </select></label>
+      <label>Nota <input id="fNote" placeholder="cth: kasut futsal, ada sijil doktor"></label>
+      <button type="submit">💾 Simpan</button>
+    </form>
+  </section>
+
+  <!-- LIST -->
+  <section id="view-list" class="view">
+    <h2>Semua resit</h2>
+    <input id="search" placeholder="🔍 Cari...">
+    <div id="list"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-set" class="view">
+    <h2>Tetapan</h2>
+    <label>Anggaran pendapatan bercukai setahun (RM)
+      <input id="income" type="number" inputmode="numeric" placeholder="cth: 80000">
+    </label>
+    <p class="note">Guna untuk anggar berapa cukai dijimat. Disimpan dalam phone ni je.</p>
+    <h2>Backup & data</h2>
+    <p class="note">Semua data & gambar resit simpan dalam phone ni sahaja. Takde server. Buat backup dan simpan di mana kau suka (Google Drive, OneDrive, WhatsApp diri sendiri...).</p>
+    <button id="btnExport">📦 Backup (ZIP)</button>
+    <label class="btn2">📥 Restore dari ZIP <input type="file" id="importIn" accept=".zip" hidden></label>
+    <button id="btnCsv" class="btn2">📄 Export CSV ringkasan</button>
+    <p class="note" id="storageInfo"></p>
+    <p class="note">⚠️ Rujukan sahaja, bukan nasihat cukai. Sahkan kelayakan & had dengan LHDN. Simpan resit asal 7 tahun.</p>
+  </section>
+</main>
+
+<nav>
+  <button data-v="dash" class="on">📊<span>Dashboard</span></button>
+  <button data-v="add">➕<span>Tambah</span></button>
+  <button data-v="list">🧾<span>Resit</span></button>
+  <button data-v="set">⚙️<span>Tetapan</span></button>
+</nav>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="reliefs.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
