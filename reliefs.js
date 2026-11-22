@@ -70,8 +70,20 @@ const YA2027 = clone(YA2026);
 YA2027.ya = 2027;
 YA2027.personal = 12000; // naik dari RM9,000
 YA2027.note = "Had YA2027 ikut cadangan Belanjawan 2027 (relief individu RM12,000 auto). Masih cadangan — sahkan dengan senarai LHDN YA2027.";
-YA2027.bands = BANDS_2026.map(([t, r]) => [t, t === 100000 ? .18 : r]); // RM70k–100k turun 1 mata peratus
-YA2027.categories = YA2027.categories.filter(c => c.id !== "tourism"); // YA2026 sahaja
+// Band YA2027 (cadangan): 70k–100k 19→18%, 100k–150k 25→24%, 1j–2j 28→30%
+YA2027.bands = [[5000, 0], [20000, .01], [35000, .03], [50000, .06], [70000, .11], [100000, .18], [150000, .24],
+  [400000, .25], [600000, .26], [1000000, .28], [Infinity, .30]];
+// Pelancongan dilanjutkan ke YA2027 (Tahun Melawat Malaysia). Peralatan penyusuan masuk bawah Kesihatan.
+YA2027.categories = YA2027.categories.filter(c => c.id !== "breastfeeding");
+const tour = YA2027.categories.find(c => c.id === "tourism"); tour.desc = "Tiket masuk tarikan pelancongan & program seni/budaya dalam negara (dilanjutkan ke YA2027)"; delete tour.onlyYA;
+const med = YA2027.categories.find(c => c.id === "medical");
+med.name = "Kesihatan & Kesejahteraan"; med.desc += " + BARU: penjagaan selepas bersalin (RM3,000), peralatan penyusuan (RM1,000)";
+med.subs.push({ id: "postnatal", name: "Penjagaan selepas bersalin", limit: 3000 }, { id: "breastfeeding", name: "Peralatan penyusuan", limit: 1000 });
+med.keywords.push("confinement", "pantang", "postnatal", "breast pump", "medela", "spectra");
+const edu = YA2027.categories.find(c => c.id === "education_self");
+edu.name = "Pendidikan & Latihan Kemahiran"; edu.desc = "Yuran diploma/ijazah/sarjana, upskilling TVET diri/pasangan (RM3,000), kursus bukan kerja (hobi/bahasa/agama) diri/pasangan/anak (RM2,000)";
+edu.subs = [{ id: "upskill", name: "Upskilling TVET (diri/pasangan)", limit: 3000 }, { id: "nonwork", name: "Kursus hobi/bahasa/agama", limit: 2000 }];
+YA2027.categories.find(c => c.id === "parents_medical").desc = "Semua kos penjagaan ibu bapa / datuk nenek (bukan kesihatan sahaja), pemeriksaan & vaksin";
 const life = YA2027.categories.find(c => c.id === "lifestyle");
 life.desc = "Buku, smartphone, tablet, komputer, internet, upskilling + BARU: langganan AI (ChatGPT, Gemini, Claude...), ambil haiwan peliharaan dari pusat berdaftar, vaksin & mandul haiwan di vet berdaftar";
 life.keywords.push("openai", "chatgpt", "gemini", "claude", "anthropic", "copilot", "midjourney", "perplexity", "cursor", "grammarly", "veterinar", "vet ", "klinik haiwan", "animal clinic", "spca", "pet adoption");
@@ -80,6 +92,18 @@ sport.desc += " + BARU: kasut sukan (sub-had RM300)";
 sport.subs = [{ id: "shoes", name: "Kasut sukan", limit: 300 }];
 sport.keywords.push("nike", "adidas", "asics", "skechers", "puma", "new balance", "hoka");
 
+// Relief ikut status (takde resit) — sama untuk YA2026 & YA2027
+const FAMILY = {
+  spouse: 4000,        // pasangan tiada pendapatan / nafkah bekas isteri
+  spouseOku: 6000,     // tambahan pasangan OKU
+  selfOku: 7000,       // individu OKU
+  kidU18: 2000,        // anak bawah 18
+  kidPre: 2000,        // 18+ belajar A-level/sijil/matrikulasi/persediaan
+  kidHigher: 8000,     // 18+ diploma ke atas (MY) / ijazah ke atas (luar negara)
+  kidOku: 8000,        // anak OKU
+  kidOkuHigher: 8000,  // tambahan anak OKU 18+ di IPT
+};
+YA2026.family = FAMILY; YA2027.family = FAMILY;
 window.RELIEF_YEARS = { 2026: YA2026, 2027: YA2027 };
 // Pilih set relief ikut YA (tahun belum ada → guna yang paling dekat)
 window.reliefFor = y => {

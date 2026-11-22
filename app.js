@@ -65,8 +65,47 @@ const eaKey = (y, w) => `ea:${y}:${w}`;
 async function getEA(y, w) { return (await DB.getMeta(eaKey(y, w))) || {}; }
 
 // Kira relief untuk seorang pembayar cukai (resit + EA)
+const psKey = (y, w) => `ps:${y}:${w}`;
+const profKey = (y, w) => `prof:${y}:${w}`;
+async function getPS(y, w) { return (await DB.getMeta(psKey(y, w))) || []; }
+async function getProf(y, w) {
+  return (await DB.getMeta(profKey(y, w))) || (await DB.getMeta(profKey(y - 1, w))) || { married: 0, spouseWorks: 1, claimKids: w === "me", kids: {} };
+}
+// Unjuran setahun dari payslip: bulan yang ada dijumlah, bulan yang takde payslip
+// diisi dengan purata bulan yang ada (12 bulan setahun)
+function projectPS(list) {
+  if (!list.length) return null;
+  const sorted = [...list].sort((a, b) => a.month.localeCompare(b.month));
+  const n = sorted.length, missing = Math.max(12 - n, 0);
+  const out = { months: n, missing, lastM: +sorted[n - 1].month.slice(5, 7) };
+  for (const f of ["gross", "epf", "socso", "pcb", "zakat"]) {
+    const sum = sorted.reduce((s, x) => s + (+x[f] || 0), 0);
+    out[f] = sum + (sum / n) * missing;
+  }
+  return out;
+}
+function autoReliefs(prof) {
+  const F = CFG.family, k = prof.kids || {}, list = [{ name: "Individu", amt: CFG.personal }];
+  if (+prof.married && !+prof.spouseWorks) list.push({ name: "Pasangan tiada pendapatan", amt: F.spouse });
+  if (+prof.married && prof.spouseOku) list.push({ name: "Pasangan OKU (tambahan)", amt: F.spouseOku });
+  if (prof.oku) list.push({ name: "Individu OKU", amt: F.selfOku });
+  if (prof.claimKids) {
+    const add = (n, rate, label) => { n = +n || 0; if (n) list.push({ name: `${label} × ${n}`, amt: n * rate }); };
+    add(k.u18, F.kidU18, "Anak bawah 18"); add(k.pre, F.kidPre, "Anak 18+ pra-U"); add(k.higher, F.kidHigher, "Anak 18+ IPT");
+    add(k.oku, F.kidOku, "Anak OKU"); add(k.okuHigher, F.kidOkuHigher, "Anak OKU 18+ IPT (tambahan)");
+  }
+  return list;
+}
+
 async function computeFor(w) {
-  const ea = await getEA(year, w);
+  const eaRaw = await getEA(year, w);
+  const ps = projectPS(await getPS(year, w));
+  const prof = await getProf(year, w);
+  const auto = autoReliefs(prof);
+  const autoTotal = auto.reduce((s, a) => s + a.amt, 0);
+  // EA manual mengatasi unjuran payslip
+  const pick = f => (eaRaw[f] !== undefined && eaRaw[f] !== null && eaRaw[f] !== "" && +eaRaw[f] > 0) ? +eaRaw[f] : (ps ? ps[f] : 0);
+  const ea = { epf: pick("epf"), socso: pick("socso"), zakat: pick("zakat"), pcb: (eaRaw.pcb != null && eaRaw.pcb !== "") ? +eaRaw.pcb : (ps ? ps.pcb : null), gross: pick("gross") };
   const rs = receipts.filter(r => r.date.startsWith(String(year)) && byOf(r) === w);
   if (ea.epf) rs.push({ cat: "epf_life", sub: "epf", amount: +ea.epf, virtual: true });
   if (ea.socso) rs.push({ cat: "socso", amount: +ea.socso, virtual: true });
@@ -83,17 +122,19 @@ async function computeFor(w) {
     claimed += eff; totalLimit += c.limit;
     return { c, spent, eff, subs, left: Math.max(c.limit - eff, 0), pct: Math.min(eff / c.limit * 100, 100) };
   });
-  const income = +(await DB.getMeta(w === "me" ? "income" : "income2")) || 0;
+  const manualIncome = +(await DB.getMeta(w === "me" ? "income" : "income2")) || 0;
+  const income = ea.gross || manualIncome;
+  const incomeSrc = eaRaw.gross > 0 ? "EA" : ps && ps.gross ? `unjuran ${ps.months} payslip` : "anggaran Tetapan";
   let tax = null;
   if (income > 0) {
-    const base = Math.max(income - CFG.personal, 0);
+    const base = Math.max(income - autoTotal, 0);
     const ci = Math.max(base - claimed, 0);
     let payable = taxOn(ci);
     const rebate = ci <= 35000 ? Math.min(400, payable) : 0;
     payable = Math.max(payable - rebate - (+ea.zakat || 0), 0);
-    tax = { income, ci, saved: taxOn(base) - taxOn(ci), rate: marginal(ci), payable, pcb: ea.pcb != null && ea.pcb !== "" ? +ea.pcb : null, zakat: +ea.zakat || 0, rebate };
+    tax = { income, incomeSrc, ci, saved: taxOn(base) - taxOn(ci), rate: marginal(ci), payable, pcb: ea.pcb != null && ea.pcb !== "" ? +ea.pcb : null, zakat: +ea.zakat || 0, rebate };
   }
-  return { rows, claimed, totalLimit, tax, ea };
+  return { rows, claimed, totalLimit, tax, ea, auto, autoTotal, ps };
 }
 
 async function renderDash() {
@@ -130,11 +171,12 @@ async function renderDash() {
     if (t.pcb !== null) {
       const diff = t.pcb - t.payable;
       line += diff >= 0 ? `<br>💰 Anggaran <b>refund ${fmt(Math.round(diff))}</b> (PCB ${fmt(t.pcb)})` : `<br>⚠️ Anggaran <b>kena bayar lagi ${fmt(Math.round(-diff))}</b> (PCB ${fmt(t.pcb)})`;
-    } else line += `<br><small>Isi PCB dalam "EA form" untuk anggar refund</small>`;
-    return `<div><small>${names[i]} · pendapatan bercukai ${fmt(Math.round(t.ci))}</small><div>${line}</div></div>`;
+    } else line += `<br><small>Upload payslip untuk anggar refund</small>`;
+    return `<div><small>${names[i]} · pendapatan ${fmt(Math.round(t.income))} (${t.incomeSrc}) · relief auto ${fmt(p.autoTotal)} · bercukai ${fmt(Math.round(t.ci))}</small><div>${line}</div></div>`;
   }).join("");
   tb.innerHTML = boxes; tb.classList.toggle("hidden", !boxes);
   $("#btnEA").classList.toggle("hidden", who === "all");
+  $("#btnProf").classList.toggle("hidden", who === "all");
 
   // Cadangan siapa patut claim (bila kedua-dua pendapatan ada)
   let tip = "";
@@ -475,18 +517,20 @@ init();
 // ---------- EA FORM ----------
 async function allEA() {
   const out = {};
-  for (let y = 2025; y <= new Date().getFullYear() + 1; y++) for (const w of ["me", "sp"]) { const v = await DB.getMeta(eaKey(y, w)); if (v) out[eaKey(y, w)] = v; }
+  for (let y = 2025; y <= new Date().getFullYear() + 1; y++) for (const w of ["me", "sp"]) for (const k of [eaKey(y, w), psKey(y, w), profKey(y, w)]) { const v = await DB.getMeta(k); if (v) out[k] = v; }
   return out;
 }
 window.allEA = allEA;
 $("#btnEA").onclick = async () => {
   const ea = await getEA(year, who);
   $("#eaWho").textContent = `${who === "me" ? "👤 Aku" : "💑 Pasangan"} · YA ${year}`;
-  $("#eaEpf").value = ea.epf || ""; $("#eaSocso").value = ea.socso || ""; $("#eaZakat").value = ea.zakat || ""; $("#eaPcb").value = ea.pcb ?? "";
+  $("#eaEpf").value = ea.epf || ""; $("#eaSocso").value = ea.socso || ""; $("#eaZakat").value = ea.zakat || ""; $("#eaPcb").value = ea.pcb ?? ""; $("#eaGross").value = ea.gross || "";
+  $("#psForm").classList.add("hidden"); $("#psStatus").textContent = "";
+  await renderPS();
   $("#eaModal").classList.remove("hidden");
 };
 $("#eaSave").onclick = async () => {
-  await DB.setMeta(eaKey(year, who), { epf: +$("#eaEpf").value || 0, socso: +$("#eaSocso").value || 0, zakat: +$("#eaZakat").value || 0, pcb: $("#eaPcb").value === "" ? null : +$("#eaPcb").value });
+  await DB.setMeta(eaKey(year, who), { epf: +$("#eaEpf").value || 0, socso: +$("#eaSocso").value || 0, zakat: +$("#eaZakat").value || 0, pcb: $("#eaPcb").value === "" ? null : +$("#eaPcb").value, gross: +$("#eaGross").value || 0 });
   $("#eaModal").classList.add("hidden"); toast("EA disimpan ✅"); renderDash();
   window.afterSave && window.afterSave();
 };
@@ -501,15 +545,18 @@ $("#btnBE").onclick = async () => {
     const p = await computeFor(w);
     const nm = w === "me" ? "👤 Aku" : "💑 Pasangan";
     const list = p.rows.filter(r => r.eff > 0).sort((a, b) => CFG.categories.indexOf(a.c) - CFG.categories.indexOf(b.c));
-    html += `<h4>${nm} — YA ${year}</h4><table class="be"><tr><td>Individu (auto)</td><td>${fmt(CFG.personal)}</td></tr>`;
-    txt += `${nm.replace(/^\S+ /, "")} — YA ${year}\nIndividu (auto): ${fmt(CFG.personal)}\n`;
+    html += `<h4>${nm} — YA ${year}</h4><table class="be">`;
+    txt += `${nm.replace(/^\S+ /, "")} — YA ${year}\n`;
+    if (p.tax) { html += `<tr><td>Pendapatan kasar (${p.tax.incomeSrc})</td><td>${fmt(Math.round(p.tax.income))}</td></tr>`; txt += `Pendapatan kasar: ${fmt(Math.round(p.tax.income))}\n`; }
+    for (const a of p.auto) { html += `<tr><td>${a.name}</td><td>${fmt(a.amt)}</td></tr>`; txt += `${a.name}: ${fmt(a.amt)}\n`; }
     for (const r of list) {
       html += `<tr><td>${r.c.icon} ${r.c.name}</td><td>${fmt(r.eff)}</td></tr>`;
       txt += `${r.c.name}: ${fmt(r.eff)}\n`;
       for (const sb of r.subs.filter(x => x.eff > 0)) { html += `<tr class="besub"><td>↳ ${sb.name}</td><td>${fmt(sb.eff)}</td></tr>`; txt += `  - ${sb.name}: ${fmt(sb.eff)}\n`; }
     }
-    html += `<tr class="betot"><td>Jumlah relief</td><td>${fmt(p.claimed + CFG.personal)}</td></tr>`;
-    txt += `Jumlah relief: ${fmt(p.claimed + CFG.personal)}\n`;
+    html += `<tr class="betot"><td>Jumlah relief</td><td>${fmt(p.claimed + p.autoTotal)}</td></tr>`;
+    txt += `Jumlah relief: ${fmt(p.claimed + p.autoTotal)}\n`;
+    if (p.ea.pcb != null) { html += `<tr><td>PCB dipotong</td><td>${fmt(Math.round(p.ea.pcb))}</td></tr>`; txt += `PCB dipotong: ${fmt(Math.round(p.ea.pcb))}\n`; }
     if (p.ea.zakat) { html += `<tr><td>🕌 Zakat (rebat)</td><td>${fmt(p.ea.zakat)}</td></tr>`; txt += `Zakat (rebat): ${fmt(p.ea.zakat)}\n`; }
     if (p.tax) { html += `<tr><td>Cukai anggaran</td><td>${fmt(Math.round(p.tax.payable))}</td></tr>`; txt += `Cukai anggaran: ${fmt(Math.round(p.tax.payable))}\n`; }
     html += "</table>"; txt += "\n";
@@ -540,3 +587,125 @@ $("#btnIcs").onclick = () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ResitKu-peringatan.ics"; a.click();
   toast("Buka fail tu & tekan Add All 📅");
 };
+
+// ---------- PAYSLIP ----------
+const MONTHS = { jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mac: 3, mar: 3, march: 3, apr: 4, april: 4, mei: 5, may: 5, jun: 6, june: 6, jul: 7, julai: 7, july: 7, ogos: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9, okt: 10, oct: 10, oktober: 10, october: 10, nov: 11, november: 11, dis: 12, dec: 12, disember: 12, december: 12 };
+function parsePayslip(text) {
+  const out = {};
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const firstNum = l => { const m = l.replace(/(\d),(\d{3})/g, "$1$2").match(/\d+\.\d{2}/); return m ? +m[0] : null; };
+  const rules = [
+    ["gross", /(gaji kasar|gross\s*(pay|salary|earning|income|wages?)|jumlah\s*(pendapatan|gaji|perolehan|emolumen)|total\s*(earnings?|gross|income|emolument))/],
+    ["epf", /(kwsp|\bepf\b|caruman pekerja)/],
+    ["socso", /(perkeso|socso)/],
+    ["eis", /(\bsip\b|\beis\b|insurans pekerjaan|employment insurance)/],
+    ["pcb", /(\bpcb\b|\bmtd\b|potongan cukai|cukai pendapatan|income tax|\btax\b)/],
+    ["zakat", /zakat/],
+  ];
+  for (const l of lines) {
+    const low = l.toLowerCase();
+    if (/(majikan|employer|\bco\b|company|\ber\b|syarikat)/.test(low)) continue; // abaikan caruman majikan
+    for (const [k, re] of rules) if (out[k] == null && re.test(low)) { const v = firstNum(l); if (v != null) out[k] = v; }
+  }
+  // Bulan: "Oktober 2026", "OCT-2026", "10/2026"
+  const low = text.toLowerCase();
+  let m = low.match(/\b(januari|january|februari|february|mac|march|april|mei|may|jun|june|julai|july|ogos|august|september|sept|oktober|october|november|disember|december|jan|feb|mar|apr|jul|aug|sep|okt|oct|nov|dis|dec)[\s\-\/.,]*(20\d{2})\b/);
+  if (m) out.month = `${m[2]}-${String(MONTHS[m[1]]).padStart(2, "0")}`;
+  else if ((m = low.match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(20\d{2})\b/))) out.month = `${m[2]}-${m[1].padStart(2, "0")}`;
+  return out;
+}
+
+async function extractText(blob) {
+  if (isPdf(blob)) {
+    if (!window.pdfjsLib) {
+      await loadScript("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+    const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+    const pg = await pdf.getPage(1);
+    const tc = await pg.getTextContent();
+    const lines = {};
+    tc.items.forEach(it => { const y = Math.round(it.transform[5] / 3); (lines[y] = lines[y] || []).push(it); });
+    const text = Object.keys(lines).sort((a, b) => b - a).map(y => lines[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(" ")).join("\n");
+    if (text.replace(/\s/g, "").length > 20) return text;
+    const vp = pg.getViewport({ scale: 2 });
+    const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+    await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.9));
+  } else blob = await compress(blob, 1600, 0.9, true);
+  if (!window.Tesseract) throw new Error("OCR tak load");
+  if (!ocrWorker) ocrWorker = await Tesseract.createWorker("eng", 1);
+  return (await ocrWorker.recognize(blob)).data.text;
+}
+
+$("#psIn").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("#psStatus").textContent = "🔍 Membaca payslip...";
+  try {
+    const p = parsePayslip(await extractText(f));
+    const now = new Date();
+    $("#psMonth").value = p.month || `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("#psGross").value = p.gross ?? ""; $("#psEpf").value = p.epf ?? "";
+    $("#psSocso").value = ((p.socso || 0) + (p.eis || 0)) || ""; $("#psPcb").value = p.pcb ?? ""; $("#psZakat").value = p.zakat ?? "";
+    const n = ["gross", "epf", "socso", "pcb"].filter(k => p[k] != null).length;
+    $("#psStatus").textContent = n >= 3 ? "✅ Dibaca — semak nombor & bulan, lepas tu simpan." : "😕 Sebahagian je dapat dibaca — lengkapkan manual.";
+  } catch (err) { $("#psStatus").textContent = "Tak dapat baca (" + err.message + ") — isi manual."; }
+  $("#psForm").classList.remove("hidden");
+  e.target.value = "";
+};
+$("#psSave").onclick = async () => {
+  const month = $("#psMonth").value;
+  if (!month) return toast("Pilih bulan");
+  if (+month.slice(0, 4) !== year) return toast(`Payslip ni untuk ${month.slice(0, 4)} — tukar YA kat atas dulu`);
+  const list = (await getPS(year, who)).filter(x => x.month !== month);
+  list.push({ month, gross: +$("#psGross").value || 0, epf: +$("#psEpf").value || 0, socso: +$("#psSocso").value || 0, pcb: +$("#psPcb").value || 0, zakat: +$("#psZakat").value || 0 });
+  await DB.setMeta(psKey(year, who), list);
+  $("#psForm").classList.add("hidden"); $("#psStatus").textContent = "";
+  toast("Payslip disimpan ✅"); await renderPS(); renderDash();
+  window.afterSave && window.afterSave();
+};
+async function renderPS() {
+  const list = (await getPS(year, who)).sort((a, b) => a.month.localeCompare(b.month));
+  const pj = projectPS(list);
+  $("#psList").innerHTML = list.length ? `
+    <table class="be"><tr><td><b>Bulan</b></td><td><b>Kasar</b></td><td><b>PCB</b></td><td></td></tr>
+    ${list.map(x => `<tr><td>${x.month}</td><td>${fmt(x.gross)}</td><td>${fmt(x.pcb)}</td><td><button class="del" data-psdel="${x.month}">🗑</button></td></tr>`).join("")}</table>
+    <div class="banner">📈 Unjuran setahun (${pj.months} payslip${pj.missing ? ` + ${pj.missing} bulan lain diandaikan sama dengan purata` : ", 12 bulan lengkap"}):<br>
+    Kasar <b>${fmt(Math.round(pj.gross))}</b> · KWSP ${fmt(Math.round(pj.epf))} · PERKESO ${fmt(Math.round(pj.socso))} · PCB <b>${fmt(Math.round(pj.pcb))}</b>${pj.zakat ? ` · Zakat ${fmt(Math.round(pj.zakat))}` : ""}</div>`
+    : `<p class="note">Belum ada payslip untuk YA ${year}. Upload satu je pun cukup — app anggap 12 bulan sama. Lebih banyak bulan = lebih tepat (bonus, OT, kenaikan gaji). Bulan bonus: upload payslip bulan tu juga.</p>`;
+  document.querySelectorAll("[data-psdel]").forEach(b => b.onclick = async () => {
+    await DB.setMeta(psKey(year, who), (await getPS(year, who)).filter(x => x.month !== b.dataset.psdel));
+    renderPS(); renderDash();
+  });
+}
+
+// ---------- PROFIL KELUARGA ----------
+const pf = id => $("#" + id);
+function profFromForm() {
+  return { married: +pf("pMarried").value, spouseWorks: +pf("pSpouseWorks").value, spouseOku: pf("pSpouseOku").checked, oku: pf("pOku").checked,
+    claimKids: pf("pClaimKids").checked,
+    kids: { u18: +pf("kU18").value || 0, pre: +pf("kPre").value || 0, higher: +pf("kHigher").value || 0, oku: +pf("kOku").value || 0, okuHigher: +pf("kOkuHigher").value || 0 } };
+}
+function profSummary() {
+  const p = profFromForm();
+  pf("pSpouseBox").classList.toggle("hidden", !p.married);
+  const list = autoReliefs(p);
+  pf("profSum").innerHTML = "Relief automatik: " + list.map(a => `${a.name} ${fmt(a.amt)}`).join(" · ") + `<br><b>Jumlah ${fmt(list.reduce((s, a) => s + a.amt, 0))}</b>`;
+}
+$("#btnProf").onclick = async () => {
+  const p = await getProf(year, who), k = p.kids || {};
+  pf("profWho").textContent = `${who === "me" ? "👤 Aku" : "💑 Pasangan"} · YA ${year}`;
+  pf("pMarried").value = +p.married || 0; pf("pSpouseWorks").value = p.spouseWorks === 0 || p.spouseWorks === "0" ? 0 : 1;
+  pf("pSpouseOku").checked = !!p.spouseOku; pf("pOku").checked = !!p.oku; pf("pClaimKids").checked = !!p.claimKids;
+  pf("kU18").value = k.u18 || ""; pf("kPre").value = k.pre || ""; pf("kHigher").value = k.higher || ""; pf("kOku").value = k.oku || ""; pf("kOkuHigher").value = k.okuHigher || "";
+  profSummary();
+  $("#profModal").classList.remove("hidden");
+};
+document.querySelectorAll("#profModal input, #profModal select").forEach(x => x.oninput = x.onchange = profSummary);
+$("#profSave").onclick = async () => {
+  await DB.setMeta(profKey(year, who), profFromForm());
+  $("#profModal").classList.add("hidden"); toast("Profil disimpan ✅"); renderDash();
+  window.afterSave && window.afterSave();
+};
+$("#profClose").onclick = () => $("#profModal").classList.add("hidden");
+$("#profModal").onclick = e => { if (e.target.id === "profModal") e.target.classList.add("hidden"); };

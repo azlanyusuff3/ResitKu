@@ -47,8 +47,9 @@
     <div id="backupWarn" class="banner warn hidden"></div>
     <div id="taxBox" class="taxbox hidden"></div>
     <div class="dashBtns">
-      <button id="btnEA" class="btn2">🧾 Isi dari EA form / payslip</button>
-      <button id="btnBE" class="btn2">📋 Ringkasan untuk e-Filing (BE)</button>
+      <button id="btnEA" class="btn2">💵 Payslip / EA</button>
+      <button id="btnProf" class="btn2">👨‍👩‍👧 Profil keluarga</button>
+      <button id="btnBE" class="btn2 span2">📋 Ringkasan untuk e-Filing (BE)</button>
     </div>
     <h2>Baki ikut kategori</h2>
     <div id="cats"></div>
@@ -138,15 +139,60 @@
 
 <div id="eaModal" class="modal hidden">
   <div class="sheet">
-    <h3>🧾 Dari EA form / payslip</h3>
+    <h3>💵 Payslip / EA form</h3>
     <p class="note" id="eaWho"></p>
+    <label class="scanbtn">📄 Upload payslip (gambar / PDF)
+      <input type="file" id="psIn" accept="image/*,application/pdf" hidden>
+    </label>
+    <div id="psStatus" class="note"></div>
+    <div id="psForm" class="psform hidden">
+      <div class="grid2">
+        <label>Bulan <input id="psMonth" type="month"></label>
+        <label>Gaji kasar <input id="psGross" type="number" step="0.01" inputmode="decimal"></label>
+        <label>KWSP (pekerja) <input id="psEpf" type="number" step="0.01" inputmode="decimal"></label>
+        <label>PERKESO + SIP <input id="psSocso" type="number" step="0.01" inputmode="decimal"></label>
+        <label>PCB / MTD <input id="psPcb" type="number" step="0.01" inputmode="decimal"></label>
+        <label>Zakat <input id="psZakat" type="number" step="0.01" inputmode="decimal"></label>
+      </div>
+      <button id="psSave">💾 Simpan payslip bulan ni</button>
+    </div>
+    <div id="psList"></div>
+    <details><summary>✍️ Isi manual dari EA form (tahunan) — guna bila EA dah keluar</summary>
     <label>KWSP (caruman pekerja setahun) <input id="eaEpf" type="number" inputmode="decimal" step="0.01"></label>
     <label>PERKESO + SIP setahun <input id="eaSocso" type="number" inputmode="decimal" step="0.01"></label>
     <label>Zakat / fitrah dibayar (rebat, tolak terus dari cukai) <input id="eaZakat" type="number" inputmode="decimal" step="0.01"></label>
     <label>PCB / MTD dipotong setahun <input id="eaPcb" type="number" inputmode="decimal" step="0.01"></label>
-    <p class="note">Tip: Desember nanti, darab PCB bulanan × 12 untuk anggaran. Bila EA form keluar (Feb/Mac), betulkan nombor sebenar.</p>
-    <button id="eaSave">💾 Simpan</button>
+    <label>Pendapatan kasar setahun (EA) <input id="eaGross" type="number" inputmode="decimal" step="0.01"></label>
+    <p class="note">Nombor EA (kalau diisi) mengatasi unjuran payslip.</p>
+    <button id="eaSave">💾 Simpan EA</button>
+    </details>
     <button id="eaClose" class="btn2">Tutup</button>
+  </div>
+</div>
+
+<div id="profModal" class="modal hidden">
+  <div class="sheet tall">
+    <h3>👨‍👩‍👧 Profil keluarga</h3>
+    <p class="note" id="profWho"></p>
+    <label>Status <select id="pMarried"><option value="0">Bujang / bercerai / balu</option><option value="1">Berkahwin</option></select></label>
+    <div id="pSpouseBox">
+      <label>Pasangan ada pendapatan? <select id="pSpouseWorks"><option value="1">Ya, bekerja / ada pendapatan</option><option value="0">Tiada pendapatan (atau taksiran bersama)</option></select></label>
+      <label class="chk"><input type="checkbox" id="pSpouseOku"> Pasangan OKU (berdaftar JKM)</label>
+    </div>
+    <label class="chk"><input type="checkbox" id="pOku"> Aku sendiri OKU (berdaftar JKM)</label>
+    <h4>Anak (belum berkahwin)</h4>
+    <label class="chk"><input type="checkbox" id="pClaimKids" checked> Relief anak di-claim oleh orang ni</label>
+    <p class="note">Suami isteri taksiran berasingan — relief anak boleh di-claim oleh seorang sahaja bagi setiap anak. Untuk "Pasangan", nyahtanda kalau kau yang claim.</p>
+    <div class="grid2">
+      <label>Bawah 18 tahun <input id="kU18" type="number" min="0" inputmode="numeric"></label>
+      <label>18+ A-level / matrik / sijil <input id="kPre" type="number" min="0" inputmode="numeric"></label>
+      <label>18+ diploma / ijazah ke atas <input id="kHigher" type="number" min="0" inputmode="numeric"></label>
+      <label>Anak OKU <input id="kOku" type="number" min="0" inputmode="numeric"></label>
+      <label>Anak OKU 18+ di IPT <input id="kOkuHigher" type="number" min="0" inputmode="numeric"></label>
+    </div>
+    <div id="profSum" class="banner"></div>
+    <button id="profSave">💾 Simpan</button>
+    <button id="profClose" class="btn2">Tutup</button>
   </div>
 </div>
 
