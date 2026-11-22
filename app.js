@@ -5,15 +5,12 @@ let receipts = [];
 let currentImg = null;
 let year = new Date().getFullYear();
 
-// Kadar cukai pemastautin (YA2023 ke atas) — [had atas band, kadar]
-const BANDS = [[5000, 0], [20000, .01], [35000, .03], [50000, .06], [70000, .11], [100000, .19],
-  [400000, .25], [600000, .26], [2000000, .28], [Infinity, .30]];
 function taxOn(ci) {
   let tax = 0, prev = 0;
-  for (const [top, r] of BANDS) { if (ci <= prev) break; tax += (Math.min(ci, top) - prev) * r; prev = top; }
+  for (const [top, r] of CFG.bands) { if (ci <= prev) break; tax += (Math.min(ci, top) - prev) * r; prev = top; }
   return tax;
 }
-function marginal(ci) { let prev = 0; for (const [top, r] of BANDS) { if (ci <= top) return r; prev = top; } return .3; }
+function marginal(ci) { for (const [top, r] of CFG.bands) { if (ci <= top) return r; } return .3; }
 
 function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
 
@@ -34,12 +31,13 @@ async function init() {
     $("#storageInfo").textContent = ok ? "✅ Storage kekal diaktifkan." : "⚠️ Browser tak jamin storage kekal — Add to Home Screen & buat backup selalu.";
   }
   receipts = await DB.all();
-  const ys = new Set([new Date().getFullYear(), ...receipts.map(r => +r.date.slice(0, 4))]);
+  const ys = new Set([new Date().getFullYear(), ...(new Date().getMonth() >= 10 ? [new Date().getFullYear() + 1] : []), ...receipts.map(r => +r.date.slice(0, 4))]);
   $("#yearSel").innerHTML = [...ys].sort((a, b) => b - a).map(y => `<option value="${y}">YA ${y}</option>`).join("");
   $("#yearSel").value = year;
-  $("#yearSel").onchange = e => { year = +e.target.value; renderDash(); renderList(); };
-  $("#fCat").innerHTML = CFG.categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join("");
-  $("#fDate").valueAsDate = new Date();
+  $("#yearSel").onchange = e => { year = +e.target.value; setReliefYA(year); $("#cfgNote").textContent = CFG.note; renderDash(); renderList(); };
+  fillCats();
+  $("#fDate").onchange = fillCats;
+  $("#fDate").valueAsDate = new Date(); fillCats();
   $("#income").value = (await DB.getMeta("income")) || "";
   $("#income").onchange = async e => { await DB.setMeta("income", +e.target.value || 0); renderDash(); };
   $("#cfgNote").textContent = CFG.note;
@@ -66,7 +64,7 @@ async function renderDash() {
   $("#totClaimed").textContent = fmt(claimed);
   $("#totLeft").textContent = `daripada ${fmt(totalLimit)} had kategori yang dijejak`;
   if (income > 0) {
-    const base = Math.max(income - 9000, 0); // relief individu RM9,000 auto
+    const base = Math.max(income - CFG.personal, 0); // relief individu auto
     const saved = taxOn(base) - taxOn(Math.max(base - claimed, 0));
     $("#taxSaved").textContent = fmt(Math.round(saved));
     $("#rateInfo").textContent = `Setiap RM100 lagi ≈ jimat RM${Math.round(marginal(Math.max(base - claimed, 0)) * 100)}`;
@@ -75,7 +73,7 @@ async function renderDash() {
     $("#rateInfo").textContent = "Isi pendapatan di Tetapan";
   }
 
-  const rate = income > 0 ? marginal(Math.max(income - 9000 - claimed, 0)) : 0;
+  const rate = income > 0 ? marginal(Math.max(income - CFG.personal - claimed, 0)) : 0;
   $("#cats").innerHTML = rows.map(({ c, spent, left, pct }) => `
     <div class="cat ${pct >= 100 ? "full" : spent > 0 ? "part" : ""}">
       <div class="cathead"><span>${c.icon} <b>${c.name}</b></span><span>${fmt(spent)} / ${fmt(c.limit)}</span></div>
@@ -108,6 +106,13 @@ $("#fileIn").onchange = $("#galleryIn").onchange = async e => {
   showPreview();
   runOCR(f);
 };
+// Kategori dalam borang ikut tahun tarikh resit
+function fillCats() {
+  const y = +($("#fDate").value || "").slice(0, 4) || new Date().getFullYear();
+  const keep = $("#fCat").value;
+  $("#fCat").innerHTML = reliefFor(y).categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join("");
+  if ([...$("#fCat").options].some(o => o.value === keep)) $("#fCat").value = keep;
+}
 function showPreview() { const p = $("#preview"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden"); }
 
 // OCR ringan: English sahaja, gambar kecil & grayscale (jimat memory iPhone)
@@ -149,7 +154,9 @@ function parseReceipt(text) {
   const merch = lines.find(l => /[a-z]{3,}/i.test(l));
   if (merch) $("#fMerchant").value = merch.slice(0, 60);
   // Kategori dari keyword
-  const hit = CFG.categories.find(c => c.keywords.some(k => low.includes(k)));
+  fillCats();
+  const yy = +($("#fDate").value || "").slice(0, 4) || year;
+  const hit = reliefFor(yy).categories.find(c => c.keywords.some(k => low.includes(k)));
   if (hit) $("#fCat").value = hit.id;
   return found;
 }
@@ -200,7 +207,7 @@ $("#addForm").onsubmit = async e => {
 $("#search").oninput = renderList;
 function renderList() {
   const q = $("#search").value.toLowerCase();
-  const cat = id => CFG.categories.find(c => c.id === id) || { icon: "❓", name: id };
+  const cat = id => findCat(id) || { icon: "❓", name: id };
   const yr = receipts.filter(r => r.date.startsWith(String(year)))
     .filter(r => !q || (r.merchant + r.note + cat(r.cat).name).toLowerCase().includes(q))
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -270,7 +277,7 @@ $("#importIn").onchange = async e => {
 
 function csv() {
   const head = "tarikh,kedai,kategori,untuk,amaun,nota";
-  const cat = id => (CFG.categories.find(c => c.id === id) || {}).name || id;
+  const cat = id => (findCat(id) || {}).name || id;
   const q = s => `"${String(s || "").replace(/"/g, '""')}"`;
   return [head, ...receipts.sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, q(r.merchant), q(cat(r.cat)), r.for, r.amount.toFixed(2), q(r.note)].join(","))].join("\n");
 }

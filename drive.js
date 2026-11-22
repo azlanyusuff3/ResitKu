@@ -74,7 +74,7 @@ const Drive = (() => {
     return (await api(url, { method: existingId ? "PATCH" : "POST", body: form })).id;
   }
 
-  const catName = id => ((window.RELIEF_CONFIG.categories.find(c => c.id === id) || {}).name || id).replace(/[\/\\]/g, "-");
+  const catName = id => ((window.findCat(id) || {}).name || id).replace(/[\/\\]/g, "-");
   const fileName = r => `${r.date}_${r.merchant.replace(/[^\w\- ]+/g, "").trim().slice(0, 30) || "resit"}_RM${r.amount.toFixed(2)}_${r.id.slice(0, 6)}.jpg`;
 
   // Upload resit yang belum sync + kemas kini resitku-data.json

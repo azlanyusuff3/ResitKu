@@ -2,8 +2,9 @@
 // YA2026 (pendapatan 2026, isi borang 2027) — termasuk perubahan Belanjawan 2026.
 // SEMAK SEMULA setiap Belanjawan baru & kemas kini file ni je. (Belanjawan 2027 berkuat kuasa YA2027.)
 // keywords = untuk auto-cadang kategori dari teks OCR resit.
-window.RELIEF_CONFIG = {
+const YA2026 = {
   ya: 2026,
+  personal: 9000,
   note: "Had YA2026 (termasuk perubahan Belanjawan 2026). Relief individu RM9,000 auto. Sahkan dengan jadual LHDN sebelum e-Filing 2027.",
   categories: [
     { id: "lifestyle", name: "Gaya Hidup", limit: 2500, icon: "📱",
@@ -53,3 +54,35 @@ window.RELIEF_CONFIG = {
       keywords: ["wheelchair", "kerusi roda", "hearing aid"] },
   ],
 };
+
+// Kadar cukai pemastautin — [had atas band, kadar]
+const BANDS_2026 = [[5000, 0], [20000, .01], [35000, .03], [50000, .06], [70000, .11], [100000, .19],
+  [400000, .25], [600000, .26], [2000000, .28], [Infinity, .30]];
+YA2026.bands = BANDS_2026;
+
+// ---------- YA2027 (Belanjawan 2027, dibentang 9 Okt 2026 — CADANGAN, tunggu Akta Kewangan & senarai LHDN) ----------
+const clone = o => JSON.parse(JSON.stringify(o));
+const YA2027 = clone(YA2026);
+YA2027.ya = 2027;
+YA2027.personal = 12000; // naik dari RM9,000
+YA2027.note = "Had YA2027 ikut cadangan Belanjawan 2027 (relief individu RM12,000 auto). Masih cadangan — sahkan dengan senarai LHDN YA2027.";
+YA2027.bands = BANDS_2026.map(([t, r]) => [t, t === 100000 ? .18 : r]); // RM70k–100k turun 1 mata peratus
+YA2027.categories = YA2027.categories.filter(c => c.id !== "tourism"); // YA2026 sahaja
+const life = YA2027.categories.find(c => c.id === "lifestyle");
+life.desc = "Buku, smartphone, tablet, komputer, internet, upskilling + BARU: langganan AI (ChatGPT, Gemini, Claude...), ambil haiwan peliharaan dari pusat berdaftar, vaksin & mandul haiwan di vet berdaftar";
+life.keywords.push("openai", "chatgpt", "gemini", "claude", "anthropic", "copilot", "midjourney", "perplexity", "cursor", "grammarly", "veterinar", "vet ", "klinik haiwan", "animal clinic", "spca", "pet adoption");
+const sport = YA2027.categories.find(c => c.id === "sports");
+sport.desc += " + BARU: kasut sukan (sub-had RM300)";
+sport.keywords.push("nike", "adidas", "asics", "skechers", "puma", "new balance", "hoka");
+
+window.RELIEF_YEARS = { 2026: YA2026, 2027: YA2027 };
+// Pilih set relief ikut YA (tahun belum ada → guna yang paling dekat)
+window.reliefFor = y => {
+  const ys = Object.keys(window.RELIEF_YEARS).map(Number).sort((a, b) => a - b);
+  const pick = ys.filter(x => x <= y).pop() || ys[0];
+  return window.RELIEF_YEARS[pick];
+};
+window.RELIEF_CONFIG = {};
+window.setReliefYA = y => Object.assign(window.RELIEF_CONFIG, window.reliefFor(y));
+window.findCat = id => { for (const k in window.RELIEF_YEARS) { const c = window.RELIEF_YEARS[k].categories.find(x => x.id === id); if (c) return c; } return null; };
+window.setReliefYA(new Date().getFullYear());
