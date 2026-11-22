@@ -716,3 +716,18 @@ $("#profSave").onclick = async () => {
 };
 $("#profClose").onclick = () => $("#profModal").classList.add("hidden");
 $("#profModal").onclick = e => { if (e.target.id === "profModal") e.target.classList.add("hidden"); };
+
+// ---------- TEMA ----------
+function applyTheme(t) {
+  const dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? "#0a0a0c" : "#ffffff";
+  document.querySelectorAll("#themeTabs button").forEach(b => b.classList.toggle("on", b.dataset.theme === t));
+}
+let themePref = "auto"; try { themePref = localStorage.getItem("theme") || "auto"; } catch {}
+applyTheme(themePref);
+document.querySelectorAll("#themeTabs button").forEach(b => b.onclick = () => {
+  themePref = b.dataset.theme; try { localStorage.setItem("theme", themePref); } catch {}
+  applyTheme(themePref);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => themePref === "auto" && applyTheme("auto"));

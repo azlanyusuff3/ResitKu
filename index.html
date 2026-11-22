@@ -15,6 +15,14 @@
 <meta name="apple-mobile-web-app-title" content="ResitKu">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
+<script>
+  // Pasang tema awal (elak kelip putih/hitam)
+  (function () {
+    var t = "auto"; try { t = localStorage.getItem("theme") || "auto"; } catch (e) {}
+    var dark = t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
 </head>
 <body>
 <header>
@@ -106,6 +114,10 @@
     <label>Anggaran pendapatan pasangan setahun (RM) — kalau nak rancang claim bersama
       <input id="income2" type="number" inputmode="numeric" placeholder="kosongkan kalau tak perlu">
     </label>
+    <h2>🎨 Tema</h2>
+    <div class="whoTabs" id="themeTabs">
+      <button data-theme="dark">🌙 Gelap</button><button data-theme="light">☀️ Cerah</button><button data-theme="auto">📱 Ikut phone</button>
+    </div>
     <h2>📅 Peringatan</h2>
     <p class="note">PWA tak boleh hantar notifikasi terjadual tanpa server, jadi peringatan dimasukkan terus ke Kalendar phone kau (1, 15 &amp; 28 Disember + Mac untuk e-Filing).</p>
     <button id="btnIcs" class="btn2">📅 Tambah peringatan ke Kalendar</button>
