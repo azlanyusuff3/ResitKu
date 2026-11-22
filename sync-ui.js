@@ -62,16 +62,19 @@
     Drive.connect(true);
   };
   el("#btnDriveSync").onclick = () => doSync(true);
-  el("#btnDriveRestore").onclick = async () => {
-    if (!confirm("Ambil semua resit dari Drive ke phone ni? Resit dengan ID sama akan ditimpa.")) return;
-    if (!(await ensureToken(true))) return;
+  async function doRestore() {
     try {
-      el("#driveStatus").textContent = "⬇️ Restore...";
+      el("#driveStatus").textContent = "⬇️ Restore dari Drive...";
       const n = await Drive.restore((i, t) => el("#driveStatus").textContent = `⬇️ Restore ${i}/${t}...`);
       if (n === null) toast("Takde data ResitKu dalam Drive ni");
-      else { receipts = await DB.all(); toast(`✅ ${n} resit dipulihkan`); init(); }
-    } catch { toast("Restore gagal"); }
+      else { receipts = await DB.all(); toast(`✅ ${n} resit dipulihkan dari Drive`); await init(); }
+    } catch (e) { toast("Restore gagal: " + e.message); }
     refresh();
+  }
+  el("#btnDriveRestore").onclick = async () => {
+    if (!confirm("Ambil semua resit dari Drive ke phone ni? Resit dengan ID sama akan ditimpa.")) return;
+    if (!Drive.valid()) { try { localStorage.setItem("afterLogin", "restore"); } catch {} return Drive.connect(false); }
+    doRestore();
   };
   el("#btnDriveOff").onclick = async () => {
     if (!confirm("Putuskan sambungan Drive? Fail dalam Drive tak dipadam.")) return;
@@ -82,8 +85,11 @@
   setTimeout(async () => {
     if (Drive.justConnected()) {
       await DB.setMeta("driveOn", true);
-      toast("✅ Google Drive disambung");
+      let next = null; try { next = localStorage.getItem("afterLogin"); localStorage.removeItem("afterLogin"); } catch {}
       show("set");
+      // Phone kosong (baru install / tukar phone) → tarik semua dari Drive dulu
+      if (next === "restore" || receipts.length === 0) { toast("✅ Disambung — memulihkan resit dari Drive..."); await doRestore(); }
+      else toast("✅ Google Drive disambung");
       doSync(false);
     } else if (Drive.authError()) {
       toast(Drive.authError() === "access_denied" ? "Login dibatalkan" : "Login Google gagal: " + Drive.authError());
