@@ -50,9 +50,14 @@
   <!-- ADD -->
   <section id="view-add" class="view">
     <h2>Tambah resit</h2>
-    <label class="scanbtn">📷 Scan / pilih gambar resit
-      <input type="file" id="fileIn" accept="image/*" capture="environment" hidden>
-    </label>
+    <div class="scanrow">
+      <label class="scanbtn">📷 Ambil gambar
+        <input type="file" id="fileIn" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="scanbtn alt">🖼️ Pilih dari Gallery
+        <input type="file" id="galleryIn" accept="image/*" hidden>
+      </label>
+    </div>
     <div id="ocrStatus" class="note"></div>
     <img id="preview" class="hidden">
     <form id="addForm">

@@ -99,7 +99,7 @@ async function renderDash() {
 }
 
 // ---------- OCR ----------
-$("#fileIn").onchange = async e => {
+$("#fileIn").onchange = $("#galleryIn").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   currentImg = await compress(f);
   const p = $("#preview"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden");
@@ -171,7 +171,7 @@ $("#addForm").onsubmit = async e => {
   await DB.put(rec);
   receipts.push(rec);
   e.target.reset(); $("#fDate").valueAsDate = new Date();
-  currentImg = null; $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = "";
+  currentImg = null; $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
   toast("Resit disimpan ✅");
   show("dash");
   window.afterSave && window.afterSave();
