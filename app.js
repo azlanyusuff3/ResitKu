@@ -71,19 +71,23 @@ async function getPS(y, w) { return (await DB.getMeta(psKey(y, w))) || []; }
 async function getProf(y, w) {
   return (await DB.getMeta(profKey(y, w))) || (await DB.getMeta(profKey(y - 1, w))) || { married: 0, spouseWorks: 1, claimKids: w === "me", kids: {} };
 }
-// Unjuran setahun dari payslip: bulan yang ada dijumlah, bulan yang takde payslip
-// diisi dengan purata bulan yang ada (12 bulan setahun)
+// Unjuran setahun dari payslip:
+// - bulan yang ada payslip → nombor sebenar
+// - bulan yang takde payslip → sama macam payslip BIASA yang terkini (bukan bonus/OT)
 function projectPS(list) {
   if (!list.length) return null;
   const sorted = [...list].sort((a, b) => a.month.localeCompare(b.month));
+  const normals = sorted.filter(x => !x.extra);
+  const base = normals[normals.length - 1] || null;
   const n = sorted.length, missing = Math.max(12 - n, 0);
-  const out = { months: n, missing, lastM: +sorted[n - 1].month.slice(5, 7) };
+  const out = { months: n, missing, extras: n - normals.length, noBase: !base && missing > 0, lastM: +sorted[n - 1].month.slice(5, 7) };
   for (const f of ["gross", "epf", "socso", "pcb", "zakat"]) {
     const sum = sorted.reduce((s, x) => s + (+x[f] || 0), 0);
-    out[f] = sum + (sum / n) * missing;
+    out[f] = sum + (base ? (+base[f] || 0) * missing : 0);
   }
   return out;
 }
+
 function autoReliefs(prof) {
   const F = CFG.family, k = prof.kids || {}, list = [{ name: "Individu", amt: CFG.personal }];
   if (+prof.married && !+prof.spouseWorks) list.push({ name: "Pasangan tiada pendapatan", amt: F.spouse });
@@ -607,6 +611,7 @@ function parsePayslip(text) {
     if (/(majikan|employer|\bco\b|company|\ber\b|syarikat)/.test(low)) continue; // abaikan caruman majikan
     for (const [k, re] of rules) if (out[k] == null && re.test(low)) { const v = firstNum(l); if (v != null) out[k] = v; }
   }
+  if (/(bonus|insentif|incentive|tunggakan|arrears|ganjaran|bayaran khas|\bot\b|overtime|lebih masa)/.test(text.toLowerCase())) out.extra = true;
   // Bulan: "Oktober 2026", "OCT-2026", "10/2026"
   const low = text.toLowerCase();
   let m = low.match(/\b(januari|january|februari|february|mac|march|april|mei|may|jun|june|julai|july|ogos|august|september|sept|oktober|october|november|disember|december|jan|feb|mar|apr|jul|aug|sep|okt|oct|nov|dis|dec)[\s\-\/.,]*(20\d{2})\b/);
@@ -645,6 +650,7 @@ $("#psIn").onchange = async e => {
     const p = parsePayslip(await extractText(f));
     const now = new Date();
     $("#psMonth").value = p.month || `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("#psExtra").checked = !!p.extra;
     $("#psGross").value = p.gross ?? ""; $("#psEpf").value = p.epf ?? "";
     $("#psSocso").value = ((p.socso || 0) + (p.eis || 0)) || ""; $("#psPcb").value = p.pcb ?? ""; $("#psZakat").value = p.zakat ?? "";
     const n = ["gross", "epf", "socso", "pcb"].filter(k => p[k] != null).length;
@@ -658,7 +664,7 @@ $("#psSave").onclick = async () => {
   if (!month) return toast("Pilih bulan");
   if (+month.slice(0, 4) !== year) return toast(`Payslip ni untuk ${month.slice(0, 4)} — tukar YA kat atas dulu`);
   const list = (await getPS(year, who)).filter(x => x.month !== month);
-  list.push({ month, gross: +$("#psGross").value || 0, epf: +$("#psEpf").value || 0, socso: +$("#psSocso").value || 0, pcb: +$("#psPcb").value || 0, zakat: +$("#psZakat").value || 0 });
+  list.push({ month, extra: $("#psExtra").checked, gross: +$("#psGross").value || 0, epf: +$("#psEpf").value || 0, socso: +$("#psSocso").value || 0, pcb: +$("#psPcb").value || 0, zakat: +$("#psZakat").value || 0 });
   await DB.setMeta(psKey(year, who), list);
   $("#psForm").classList.add("hidden"); $("#psStatus").textContent = "";
   toast("Payslip disimpan ✅"); await renderPS(); renderDash();
@@ -669,8 +675,9 @@ async function renderPS() {
   const pj = projectPS(list);
   $("#psList").innerHTML = list.length ? `
     <table class="be"><tr><td><b>Bulan</b></td><td><b>Kasar</b></td><td><b>PCB</b></td><td></td></tr>
-    ${list.map(x => `<tr><td>${x.month}</td><td>${fmt(x.gross)}</td><td>${fmt(x.pcb)}</td><td><button class="del" data-psdel="${x.month}">🗑</button></td></tr>`).join("")}</table>
-    <div class="banner">📈 Unjuran setahun (${pj.months} payslip${pj.missing ? ` + ${pj.missing} bulan lain diandaikan sama dengan purata` : ", 12 bulan lengkap"}):<br>
+    ${list.map(x => `<tr><td>${x.month}${x.extra ? " 🎁" : ""}</td><td>${fmt(x.gross)}</td><td>${fmt(x.pcb)}</td><td><button class="del" data-psdel="${x.month}">🗑</button></td></tr>`).join("")}</table>
+    ${pj.noBase ? `<div class="banner warn">⚠️ Semua payslip ditanda luar biasa. Upload sekurang-kurangnya satu payslip <b>biasa</b> supaya app boleh unjur bulan lain.</div>` : ""}
+    <div class="banner">📈 Unjuran setahun (${pj.months} payslip${pj.extras ? `, ${pj.extras} bulan luar biasa 🎁` : ""}${pj.missing ? ` + ${pj.missing} bulan lain = payslip biasa terkini` : ", 12 bulan lengkap"}):<br>
     Kasar <b>${fmt(Math.round(pj.gross))}</b> · KWSP ${fmt(Math.round(pj.epf))} · PERKESO ${fmt(Math.round(pj.socso))} · PCB <b>${fmt(Math.round(pj.pcb))}</b>${pj.zakat ? ` · Zakat ${fmt(Math.round(pj.zakat))}` : ""}</div>`
     : `<p class="note">Belum ada payslip untuk YA ${year}. Upload satu je pun cukup — app anggap 12 bulan sama. Lebih banyak bulan = lebih tepat (bonus, OT, kenaikan gaji). Bulan bonus: upload payslip bulan tu juga.</p>`;
   document.querySelectorAll("[data-psdel]").forEach(b => b.onclick = async () => {
