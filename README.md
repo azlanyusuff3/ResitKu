@@ -20,6 +20,7 @@ GitHub Pages: Settings → Pages → Branch `main` / root.
 3. **OAuth consent screen** → External → isi nama app + email → Scopes: tambah `.../auth/drive.file` → **Test users**: tambah email kau & wife
 4. **Credentials → Create Credentials → OAuth client ID** → jenis **Web application**
    - Authorized JavaScript origins: `https://azlanyusuff3.github.io`
+   - Authorized redirect URIs: `https://azlanyusuff3.github.io/resitku/`
 5. Copy **Client ID** → tampal dalam `config.js`
 6. Push → buka app → Tetapan → **Sambung Google Drive**
 

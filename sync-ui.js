@@ -50,13 +50,10 @@
   // Dipanggil oleh app.js lepas simpan resit — auto-sync kalau token masih sah (tak perlu popup)
   window.afterSave = async () => { if (await DB.getMeta("driveOn")) doSync(false).then(refresh); else refresh(); };
 
-  el("#btnDriveConnect").onclick = async () => {
-    if (!Drive.ready()) return toast("Google belum load — semak internet");
-    const ok = await Drive.connect(true);
-    if (!ok) return toast("Sambungan dibatalkan");
-    await DB.setMeta("driveOn", true);
-    toast("✅ Google Drive disambung");
-    doSync(false);
+  el("#btnDriveConnect").onclick = () => {
+    if (!Drive.ready()) return toast("Client ID belum set");
+    el("#driveStatus").textContent = "↗️ Membuka login Google...";
+    Drive.connect(true);
   };
   el("#btnDriveSync").onclick = () => doSync(true);
   el("#btnDriveRestore").onclick = async () => {
@@ -75,6 +72,17 @@
     Drive.disconnect(); await DB.setMeta("driveOn", false); refresh();
   };
 
-  // Tunggu receipts load dulu
-  setTimeout(refresh, 500);
+  // Tunggu receipts load dulu, lepas tu handle balik dari login Google
+  setTimeout(async () => {
+    if (Drive.justConnected()) {
+      await DB.setMeta("driveOn", true);
+      toast("✅ Google Drive disambung");
+      show("set");
+      doSync(false);
+    } else if (Drive.authError()) {
+      toast(Drive.authError() === "access_denied" ? "Login dibatalkan" : "Login Google gagal: " + Drive.authError());
+      show("set");
+    }
+    refresh();
+  }, 600);
 })();

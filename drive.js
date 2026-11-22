@@ -5,33 +5,38 @@ const Drive = (() => {
   const SCOPE = "https://www.googleapis.com/auth/drive.file";
   const API = "https://www.googleapis.com/drive/v3/files";
   const UP = "https://www.googleapis.com/upload/drive/v3/files";
-  let token = null, expiry = 0, tokenClient = null, pendingResolve = null;
+  let token = null, expiry = 0;
   const folderCache = {};
 
   const clientId = () => (window.GOOGLE_CLIENT_ID || "").trim();
-  const ready = () => !!(window.google && google.accounts && google.accounts.oauth2 && clientId());
+  const ready = () => !!clientId();
   const valid = () => token && Date.now() < expiry - 60000;
 
-  function initClient() {
-    if (tokenClient || !ready()) return;
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId(), scope: SCOPE,
-      callback: r => {
-        if (r.error) { pendingResolve && pendingResolve(false); pendingResolve = null; return; }
-        token = r.access_token; expiry = Date.now() + r.expires_in * 1000;
-        try { sessionStorage.setItem("gtok", JSON.stringify({ token, expiry })); } catch {}
-        pendingResolve && pendingResolve(true); pendingResolve = null;
-      },
-      error_callback: () => { pendingResolve && pendingResolve(false); pendingResolve = null; },
-    });
-  }
-  try { const s = JSON.parse(sessionStorage.getItem("gtok")); if (s && s.expiry > Date.now()) ({ token, expiry } = s); } catch {}
+  const REDIRECT = location.origin + location.pathname.replace(/index\.html$/, "");
+  function save() { try { localStorage.setItem("gtok", JSON.stringify({ token, expiry })); } catch {} }
+  try { const s = JSON.parse(localStorage.getItem("gtok")); if (s && s.expiry > Date.now()) ({ token, expiry } = s); } catch {}
 
-  // Mesti dipanggil dari tap user (popup Google)
+  // Balik dari Google: #access_token=...&expires_in=...&state=...
+  let justConnected = false, authError = null;
+  if (location.hash.includes("access_token") || location.hash.includes("error=")) {
+    const h = new URLSearchParams(location.hash.slice(1));
+    let st = null; try { st = localStorage.getItem("gstate"); localStorage.removeItem("gstate"); } catch {}
+    if (h.get("access_token") && h.get("state") === st) {
+      token = h.get("access_token"); expiry = Date.now() + (+h.get("expires_in") || 3600) * 1000;
+      save(); justConnected = true;
+    } else authError = h.get("error") || "state";
+    history.replaceState(null, "", REDIRECT);
+  }
+
+  // Redirect penuh ke Google (jalan dalam PWA home screen Android & iOS — takde popup)
   function connect(firstTime) {
-    initClient();
-    if (!tokenClient) return Promise.resolve(false);
-    return new Promise(res => { pendingResolve = res; tokenClient.requestAccessToken({ prompt: firstTime ? "consent" : "" }); });
+    if (!clientId()) return Promise.resolve(false);
+    const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem("gstate", state); } catch {}
+    const p = new URLSearchParams({ client_id: clientId(), redirect_uri: REDIRECT, response_type: "token",
+      scope: SCOPE, state, include_granted_scopes: "true", prompt: firstTime ? "consent" : "select_account" });
+    location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + p;
+    return new Promise(() => {}); // page akan pergi
   }
 
   async function api(url, opts = {}) {
@@ -132,9 +137,9 @@ const Drive = (() => {
   }
 
   function disconnect() {
-    if (token && window.google) google.accounts.oauth2.revoke(token, () => {});
-    token = null; expiry = 0; try { sessionStorage.removeItem("gtok"); } catch {}
+    if (token) fetch("https://oauth2.googleapis.com/revoke?token=" + token, { method: "POST" }).catch(() => {});
+    token = null; expiry = 0; try { localStorage.removeItem("gtok"); } catch {}
   }
 
-  return { ready, valid, connect, sync, restore, markDeleted, disconnect, hasClientId: () => !!clientId() };
+  return { justConnected: () => justConnected, authError: () => authError, redirectUri: REDIRECT, ready, valid, connect, sync, restore, markDeleted, disconnect, hasClientId: () => !!clientId() };
 })();
