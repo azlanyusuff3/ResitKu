@@ -71,19 +71,31 @@ async function getPS(y, w) { return (await DB.getMeta(psKey(y, w))) || []; }
 async function getProf(y, w) {
   return (await DB.getMeta(profKey(y, w))) || (await DB.getMeta(profKey(y - 1, w))) || { married: 0, spouseWorks: 1, claimKids: w === "me", kids: {} };
 }
-// Unjuran setahun dari payslip:
+// Unjuran setahun dari payslip, ikut majikan:
 // - bulan yang ada payslip → nombor sebenar
-// - bulan yang takde payslip → sama macam payslip BIASA yang terkini (bukan bonus/OT)
-function projectPS(list) {
+// - bulan dalam tempoh kerja majikan tu yang takde payslip → sama macam payslip BIASA terkini majikan tu
+// - semua majikan dijumlahkan (KWSP, PCB, gaji kasar semua sekali)
+const empKey = (y, w) => `emp:${y}:${w}`;
+function projectPS(list, emps = {}) {
   if (!list.length) return null;
-  const sorted = [...list].sort((a, b) => a.month.localeCompare(b.month));
-  const normals = sorted.filter(x => !x.extra);
-  const base = normals[normals.length - 1] || null;
-  const n = sorted.length, missing = Math.max(12 - n, 0);
-  const out = { months: n, missing, extras: n - normals.length, noBase: !base && missing > 0, lastM: +sorted[n - 1].month.slice(5, 7) };
-  for (const f of ["gross", "epf", "socso", "pcb", "zakat"]) {
-    const sum = sorted.reduce((s, x) => s + (+x[f] || 0), 0);
-    out[f] = sum + (base ? (+base[f] || 0) * missing : 0);
+  const groups = {};
+  for (const x of list) (groups[x.emp || "Majikan"] = groups[x.emp || "Majikan"] || []).push(x);
+  const out = { months: list.length, missing: 0, extras: 0, noBase: false, employers: [] };
+  const F = ["gross", "epf", "socso", "pcb", "zakat"];
+  F.forEach(f => out[f] = 0);
+  for (const name in groups) {
+    const g = groups[name].sort((a, b) => a.month.localeCompare(b.month));
+    const rng = emps[name] || { from: 1, to: 12 };
+    const span = Math.max(+rng.to - +rng.from + 1, 0);
+    const inRange = g.filter(x => { const m = +x.month.slice(5, 7); return m >= rng.from && m <= rng.to; });
+    const normals = g.filter(x => !x.extra);
+    const base = normals[normals.length - 1] || null;
+    const missing = Math.max(span - new Set(inRange.map(x => x.month)).size, 0);
+    const e = { name, from: +rng.from, to: +rng.to, months: g.length, missing, extras: g.length - normals.length, noBase: !base && missing > 0 };
+    for (const f of F) e[f] = g.reduce((s, x) => s + (+x[f] || 0), 0) + (base ? (+base[f] || 0) * missing : 0);
+    out.employers.push(e);
+    F.forEach(f => out[f] += e[f]);
+    out.missing += missing; out.extras += e.extras; out.noBase = out.noBase || e.noBase;
   }
   return out;
 }
@@ -103,7 +115,7 @@ function autoReliefs(prof) {
 
 async function computeFor(w) {
   const eaRaw = await getEA(year, w);
-  const ps = projectPS(await getPS(year, w));
+  const ps = projectPS(await getPS(year, w), (await DB.getMeta(empKey(year, w))) || {});
   const prof = await getProf(year, w);
   const auto = autoReliefs(prof);
   const autoTotal = auto.reduce((s, a) => s + a.amt, 0);
@@ -521,7 +533,7 @@ init();
 // ---------- EA FORM ----------
 async function allEA() {
   const out = {};
-  for (let y = 2025; y <= new Date().getFullYear() + 1; y++) for (const w of ["me", "sp"]) for (const k of [eaKey(y, w), psKey(y, w), profKey(y, w)]) { const v = await DB.getMeta(k); if (v) out[k] = v; }
+  for (let y = 2025; y <= new Date().getFullYear() + 1; y++) for (const w of ["me", "sp"]) for (const k of [eaKey(y, w), psKey(y, w), profKey(y, w), empKey(y, w)]) { const v = await DB.getMeta(k); if (v) out[k] = v; }
   return out;
 }
 window.allEA = allEA;
@@ -651,6 +663,7 @@ $("#psIn").onchange = async e => {
     const now = new Date();
     $("#psMonth").value = p.month || `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     $("#psExtra").checked = !!p.extra;
+    await fillEmpFields();
     $("#psGross").value = p.gross ?? ""; $("#psEpf").value = p.epf ?? "";
     $("#psSocso").value = ((p.socso || 0) + (p.eis || 0)) || ""; $("#psPcb").value = p.pcb ?? ""; $("#psZakat").value = p.zakat ?? "";
     const n = ["gross", "epf", "socso", "pcb"].filter(k => p[k] != null).length;
@@ -663,25 +676,43 @@ $("#psSave").onclick = async () => {
   const month = $("#psMonth").value;
   if (!month) return toast("Pilih bulan");
   if (+month.slice(0, 4) !== year) return toast(`Payslip ni untuk ${month.slice(0, 4)} — tukar YA kat atas dulu`);
-  const list = (await getPS(year, who)).filter(x => x.month !== month);
-  list.push({ month, extra: $("#psExtra").checked, gross: +$("#psGross").value || 0, epf: +$("#psEpf").value || 0, socso: +$("#psSocso").value || 0, pcb: +$("#psPcb").value || 0, zakat: +$("#psZakat").value || 0 });
+  const emp = ($("#psEmp").value || "Majikan").trim();
+  const emps = (await DB.getMeta(empKey(year, who))) || {};
+  emps[emp] = { from: +$("#psFrom").value, to: +$("#psTo").value };
+  if (emps[emp].from > emps[emp].to) return toast("Bulan mula mesti sebelum bulan akhir");
+  await DB.setMeta(empKey(year, who), emps);
+  const list = (await getPS(year, who)).filter(x => !(x.month === month && (x.emp || "Majikan") === emp));
+  list.push({ month, emp, extra: $("#psExtra").checked, gross: +$("#psGross").value || 0, epf: +$("#psEpf").value || 0, socso: +$("#psSocso").value || 0, pcb: +$("#psPcb").value || 0, zakat: +$("#psZakat").value || 0 });
   await DB.setMeta(psKey(year, who), list);
   $("#psForm").classList.add("hidden"); $("#psStatus").textContent = "";
   toast("Payslip disimpan ✅"); await renderPS(); renderDash();
   window.afterSave && window.afterSave();
 };
+const BLN = ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"];
+$("#psFrom").innerHTML = $("#psTo").innerHTML = BLN.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+async function fillEmpFields() {
+  const emps = (await DB.getMeta(empKey(year, who))) || {};
+  const names = Object.keys(emps);
+  $("#empList").innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
+  if (!$("#psEmp").value) $("#psEmp").value = names[names.length - 1] || "";
+  const r = emps[$("#psEmp").value] || { from: 1, to: 12 };
+  $("#psFrom").value = r.from; $("#psTo").value = r.to;
+}
+$("#psEmp").onchange = fillEmpFields;
 async function renderPS() {
   const list = (await getPS(year, who)).sort((a, b) => a.month.localeCompare(b.month));
-  const pj = projectPS(list);
+  const pj = projectPS(list, (await DB.getMeta(empKey(year, who))) || {});
   $("#psList").innerHTML = list.length ? `
     <table class="be"><tr><td><b>Bulan</b></td><td><b>Kasar</b></td><td><b>PCB</b></td><td></td></tr>
-    ${list.map(x => `<tr><td>${x.month}${x.extra ? " 🎁" : ""}</td><td>${fmt(x.gross)}</td><td>${fmt(x.pcb)}</td><td><button class="del" data-psdel="${x.month}">🗑</button></td></tr>`).join("")}</table>
+    ${list.map(x => `<tr><td>${x.month}${x.extra ? " 🎁" : ""}${pj.employers.length > 1 ? `<br><small>${esc(x.emp || "Majikan")}</small>` : ""}</td><td>${fmt(x.gross)}</td><td>${fmt(x.pcb)}</td><td><button class="del" data-psdel="${x.month}|${esc(x.emp || "Majikan")}">🗑</button></td></tr>`).join("")}</table>
+    ${pj.employers.length > 1 ? `<div class="banner">🏢 ${pj.employers.map(e => `<b>${esc(e.name)}</b> (${BLN[e.from - 1]}–${BLN[e.to - 1]}): kasar ${fmt(Math.round(e.gross))}, KWSP ${fmt(Math.round(e.epf))}, PCB ${fmt(Math.round(e.pcb))}`).join("<br>🏢 ")}</div>` : ""}
     ${pj.noBase ? `<div class="banner warn">⚠️ Semua payslip ditanda luar biasa. Upload sekurang-kurangnya satu payslip <b>biasa</b> supaya app boleh unjur bulan lain.</div>` : ""}
-    <div class="banner">📈 Unjuran setahun (${pj.months} payslip${pj.extras ? `, ${pj.extras} bulan luar biasa 🎁` : ""}${pj.missing ? ` + ${pj.missing} bulan lain = payslip biasa terkini` : ", 12 bulan lengkap"}):<br>
+    <div class="banner">📈 Unjuran setahun${pj.employers.length > 1 ? ` — ${pj.employers.length} majikan digabung` : ""} (${pj.months} payslip${pj.extras ? `, ${pj.extras} bulan luar biasa 🎁` : ""}${pj.missing ? ` + ${pj.missing} bulan lain = payslip biasa terkini` : ""}):<br>
     Kasar <b>${fmt(Math.round(pj.gross))}</b> · KWSP ${fmt(Math.round(pj.epf))} · PERKESO ${fmt(Math.round(pj.socso))} · PCB <b>${fmt(Math.round(pj.pcb))}</b>${pj.zakat ? ` · Zakat ${fmt(Math.round(pj.zakat))}` : ""}</div>`
     : `<p class="note">Belum ada payslip untuk YA ${year}. Upload satu je pun cukup — app anggap 12 bulan sama. Lebih banyak bulan = lebih tepat (bonus, OT, kenaikan gaji). Bulan bonus: upload payslip bulan tu juga.</p>`;
   document.querySelectorAll("[data-psdel]").forEach(b => b.onclick = async () => {
-    await DB.setMeta(psKey(year, who), (await getPS(year, who)).filter(x => x.month !== b.dataset.psdel));
+    const [m, e] = b.dataset.psdel.split("|");
+    await DB.setMeta(psKey(year, who), (await getPS(year, who)).filter(x => !(x.month === m && (x.emp || "Majikan") === e)));
     renderPS(); renderDash();
   });
 }
