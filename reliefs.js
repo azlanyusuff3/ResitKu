@@ -1,9 +1,10 @@
 // Had relief LHDN — individu pemastautin.
-// Rujukan: senarai YA2025 (Belanjawan 2025). SEMAK SEMULA setiap Belanjawan baru & kemas kini file ni je.
+// YA2026 (pendapatan 2026, isi borang 2027) — termasuk perubahan Belanjawan 2026.
+// SEMAK SEMULA setiap Belanjawan baru & kemas kini file ni je. (Belanjawan 2027 berkuat kuasa YA2027.)
 // keywords = untuk auto-cadang kategori dari teks OCR resit.
 window.RELIEF_CONFIG = {
   ya: 2026,
-  note: "Had berdasarkan senarai YA2025. Sahkan dengan jadual LHDN terkini sebelum e-Filing.",
+  note: "Had YA2026 (termasuk perubahan Belanjawan 2026). Relief individu RM9,000 auto. Sahkan dengan jadual LHDN sebelum e-Filing 2027.",
   categories: [
     { id: "lifestyle", name: "Gaya Hidup", limit: 2500, icon: "📱",
       desc: "Buku, majalah, smartphone, tablet, komputer, internet, kursus upskilling",
@@ -12,7 +13,7 @@ window.RELIEF_CONFIG = {
       desc: "Peralatan sukan, yuran gym, sewa gelanggang, yuran pertandingan (diri, pasangan, anak, ibu bapa)",
       keywords: ["decathlon", "sports", "gym", "fitness", "badminton", "futsal", "anytime fitness", "celebrity fitness", "al-ikhsan", "running", "court"] },
     { id: "medical", name: "Perubatan (diri/pasangan/anak)", limit: 10000, icon: "🏥",
-      desc: "Penyakit serius, fertiliti, vaksin, rawatan gigi, pemeriksaan penuh, mental health, kanak-kanak kurang upaya pembelajaran",
+      desc: "Penyakit serius, fertiliti, semua vaksin berdaftar NPRA & gigi & pemeriksaan penuh/mental health (RM1,000 setiap satu), anak kurang upaya pembelajaran (sub-had RM10,000)",
       keywords: ["hospital", "klinik", "clinic", "dental", "pergigian", "medical", "pharmacy", "farmasi", "vaksin", "vaccine", "kpj", "pantai", "columbia", "sunway medical", "guardian", "watsons", "caring"] },
     { id: "parents_medical", name: "Perubatan Ibu Bapa/Datuk Nenek", limit: 8000, icon: "👵",
       desc: "Rawatan, penjagaan, pemeriksaan & vaksin ibu bapa / datuk nenek",
@@ -21,7 +22,7 @@ window.RELIEF_CONFIG = {
       desc: "Yuran diploma/ijazah/sarjana/PhD, kursus upskilling (sub-had RM2,000)",
       keywords: ["university", "universiti", "college", "kolej", "yuran", "tuition fee", "uitm", "oum", "unitar"] },
     { id: "epf_life", name: "KWSP + Insurans Hayat", limit: 7000, icon: "🛡️",
-      desc: "KWSP/pencen (RM4,000) + insurans hayat/takaful keluarga (RM3,000)",
+      desc: "KWSP/pencen (RM4,000) + insurans hayat/takaful diri, pasangan & anak (RM3,000)",
       keywords: ["life insurance", "takaful", "great eastern", "prudential", "aia", "allianz life", "etiqa", "kwsp", "epf"] },
     { id: "edu_med_insurance", name: "Insurans Pendidikan & Perubatan", limit: 4000, icon: "📋",
       desc: "Premium insurans pendidikan / perubatan (diri, pasangan, anak)",
@@ -35,15 +36,18 @@ window.RELIEF_CONFIG = {
     { id: "socso", name: "PERKESO / SIP", limit: 350, icon: "👷",
       desc: "Caruman SOCSO & EIS (biasanya dalam EA form)",
       keywords: ["perkeso", "socso"] },
-    { id: "childcare", name: "Taska / Tadika", limit: 3000, icon: "🧸",
-      desc: "Yuran taska/tadika berdaftar (anak ≤ 6 tahun); kongsi had dengan penjagaan warga emas",
-      keywords: ["taska", "tadika", "kindergarten", "nursery", "childcare", "kafa"] },
+    { id: "childcare", name: "Taska / Tadika / Transit", limit: 3000, icon: "🧸",
+      desc: "Yuran taska/tadika, pusat jagaan harian & pusat transit selepas sekolah berdaftar (anak ≤ 12 tahun)",
+      keywords: ["taska", "tadika", "kindergarten", "nursery", "childcare", "transit", "daycare", "day care"] },
     { id: "breastfeeding", name: "Peralatan Penyusuan", limit: 1000, icon: "🍼",
       desc: "Pam susu, beg sejuk, dll (anak ≤ 2 tahun) — sekali setiap 2 tahun",
       keywords: ["breast pump", "medela", "spectra", "pigeon"] },
-    { id: "ev", name: "Pengecas EV / Kompos", limit: 2500, icon: "🔌",
-      desc: "Pemasangan/sewa/langganan pengecas EV, mesin kompos makanan",
-      keywords: ["ev charger", "chargev", "gentari", "jomcharge", "compost"] },
+    { id: "ev", name: "Hijau: EV / Kompos / CCTV", limit: 2500, icon: "🔌",
+      desc: "Pengecas EV, mesin kompos / pengisar sisa makanan, CCTV rumah (baru YA2026)",
+      keywords: ["ev charger", "chargev", "gentari", "jomcharge", "compost", "food waste", "cctv", "ezviz", "tapo", "imou", "hikvision"] },
+    { id: "tourism", name: "Pelancongan Domestik", limit: 1000, icon: "🎡", onlyYA: 2026,
+      desc: "Tiket masuk tarikan pelancongan & program seni/budaya dalam negara — YA2026 SAHAJA",
+      keywords: ["zoo negara", "aquaria", "sunway lagoon", "legoland", "genting skytropolis", "skytropolis", "petrosains", "kl tower", "menara kl", "theme park", "museum", "muzium", "istana budaya", "dewan filharmonik", "escape", "farm in the city", "skyworlds"] },
     { id: "disabled_equip", name: "Peralatan OKU", limit: 6000, icon: "♿",
       desc: "Peralatan sokongan untuk diri/pasangan/anak/ibu bapa OKU",
       keywords: ["wheelchair", "kerusi roda", "hearing aid"] },
