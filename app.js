@@ -4,6 +4,8 @@ const fmt = n => "RM" + Number(n || 0).toLocaleString("en-MY", { minimumFraction
 let receipts = [];
 let currentImg = null;
 let editingId = null, imgChanged = false;
+let who = "me"; // dashboard: me | sp | all
+const byOf = r => r.by || "me";
 const isPdf = b => b && (b.type === "application/pdf" || (b.name || "").toLowerCase().endsWith(".pdf"));
 let year = new Date().getFullYear();
 
@@ -43,6 +45,8 @@ async function init() {
   $("#fDate").valueAsDate = new Date(); fillCats();
   $("#income").value = (await DB.getMeta("income")) || "";
   $("#income").onchange = async e => { await DB.setMeta("income", +e.target.value || 0); renderDash(); };
+  $("#income2").value = (await DB.getMeta("income2")) || "";
+  $("#income2").onchange = async e => { await DB.setMeta("income2", +e.target.value || 0); renderDash(); };
   $("#cfgNote").textContent = CFG.note;
   const draft = await DB.getMeta("draftImg");
   if (draft && !currentImg) { currentImg = draft; showPreview(); $("#ocrStatus").textContent = "📎 Gambar resit tadi masih ada — isi butiran & simpan."; show("add"); }
@@ -51,42 +55,100 @@ async function init() {
 }
 
 // ---------- DASHBOARD ----------
-async function renderDash() {
-  const yr = receipts.filter(r => r.date.startsWith(String(year)));
-  const income = +(await DB.getMeta("income")) || 0;
+document.querySelectorAll("#whoTabs button").forEach(b => b.onclick = () => {
+  who = b.dataset.who;
+  document.querySelectorAll("#whoTabs button").forEach(x => x.classList.toggle("on", x === b));
+  renderDash();
+});
+
+const eaKey = (y, w) => `ea:${y}:${w}`;
+async function getEA(y, w) { return (await DB.getMeta(eaKey(y, w))) || {}; }
+
+// Kira relief untuk seorang pembayar cukai (resit + EA)
+async function computeFor(w) {
+  const ea = await getEA(year, w);
+  const rs = receipts.filter(r => r.date.startsWith(String(year)) && byOf(r) === w);
+  if (ea.epf) rs.push({ cat: "epf_life", sub: "epf", amount: +ea.epf, virtual: true });
+  if (ea.socso) rs.push({ cat: "socso", amount: +ea.socso, virtual: true });
   let claimed = 0, totalLimit = 0;
   const rows = CFG.categories.map(c => {
-    const rs = yr.filter(r => r.cat === c.id);
-    const spent = rs.reduce((s, r) => s + r.amount, 0);
+    const cr = rs.filter(r => r.cat === c.id);
+    const spent = cr.reduce((s, r) => s + r.amount, 0);
     const subs = (c.subs || []).map(sb => {
-      const sp = rs.filter(r => r.sub === sb.id).reduce((s, r) => s + r.amount, 0);
+      const sp = cr.filter(r => r.sub === sb.id).reduce((s, r) => s + r.amount, 0);
       return { ...sb, spent: sp, eff: Math.min(sp, sb.limit) };
     });
-    const other = rs.filter(r => !r.sub || !subs.some(sb => sb.id === r.sub)).reduce((s, r) => s + r.amount, 0);
+    const other = cr.filter(r => !r.sub || !subs.some(sb => sb.id === r.sub)).reduce((s, r) => s + r.amount, 0);
     const eff = Math.min(subs.reduce((s, sb) => s + sb.eff, 0) + other, c.limit);
     claimed += eff; totalLimit += c.limit;
     return { c, spent, eff, subs, left: Math.max(c.limit - eff, 0), pct: Math.min(eff / c.limit * 100, 100) };
   });
-  // Susun: yang ada baki & dah mula guna dulu (peluang paling dekat), kemudian yang belum sentuh
+  const income = +(await DB.getMeta(w === "me" ? "income" : "income2")) || 0;
+  let tax = null;
+  if (income > 0) {
+    const base = Math.max(income - CFG.personal, 0);
+    const ci = Math.max(base - claimed, 0);
+    let payable = taxOn(ci);
+    const rebate = ci <= 35000 ? Math.min(400, payable) : 0;
+    payable = Math.max(payable - rebate - (+ea.zakat || 0), 0);
+    tax = { income, ci, saved: taxOn(base) - taxOn(ci), rate: marginal(ci), payable, pcb: ea.pcb != null && ea.pcb !== "" ? +ea.pcb : null, zakat: +ea.zakat || 0, rebate };
+  }
+  return { rows, claimed, totalLimit, tax, ea };
+}
+
+async function renderDash() {
+  const parts = who === "all" ? [await computeFor("me"), await computeFor("sp")] : [await computeFor(who)];
+  // Gabung (untuk "Semua": had digandakan sebab setiap orang ada had sendiri)
+  const rows = parts[0].rows.map((r, i) => {
+    if (parts.length === 1) return r;
+    const o = parts[1].rows[i];
+    return { c: { ...r.c, limit: r.c.limit * 2 }, spent: r.spent + o.spent, eff: r.eff + o.eff,
+      subs: r.subs.map((sb, j) => ({ ...sb, limit: sb.limit * 2, spent: sb.spent + o.subs[j].spent, eff: sb.eff + o.subs[j].eff })),
+      left: r.left + o.left, pct: Math.min((r.eff + o.eff) / (r.c.limit * 2) * 100, 100), split: [r.eff, o.eff] };
+  });
+  const claimed = parts.reduce((s, p) => s + p.claimed, 0);
+  const totalLimit = parts.reduce((s, p) => s + p.totalLimit, 0);
   rows.sort((a, b) => (b.spent > 0) - (a.spent > 0) || (a.pct === 100) - (b.pct === 100) || b.left - a.left);
 
   $("#totClaimed").textContent = fmt(claimed);
   $("#totLeft").textContent = `daripada ${fmt(totalLimit)} had kategori yang dijejak`;
-  if (income > 0) {
-    const base = Math.max(income - CFG.personal, 0); // relief individu auto
-    const saved = taxOn(base) - taxOn(Math.max(base - claimed, 0));
-    $("#taxSaved").textContent = fmt(Math.round(saved));
-    $("#rateInfo").textContent = `Setiap RM100 lagi ≈ jimat RM${Math.round(marginal(Math.max(base - claimed, 0)) * 100)}`;
+  const taxes = parts.map(p => p.tax).filter(Boolean);
+  if (taxes.length) {
+    $("#taxSaved").textContent = fmt(Math.round(taxes.reduce((s, t) => s + t.saved, 0)));
+    $("#rateInfo").textContent = parts.length === 1 ? `Setiap RM100 lagi ≈ jimat RM${Math.round(taxes[0].rate * 100)}` : "Gabungan aku + pasangan";
   } else {
     $("#taxSaved").textContent = "—";
     $("#rateInfo").textContent = "Isi pendapatan di Tetapan";
   }
 
-  const rate = income > 0 ? marginal(Math.max(income - CFG.personal - claimed, 0)) : 0;
-  $("#cats").innerHTML = rows.map(({ c, spent, eff, subs, left, pct }) => `
+  // Kotak anggaran cukai / bayaran balik
+  const tb = $("#taxBox");
+  const names = parts.length === 1 ? [who === "me" ? "Aku" : "Pasangan"] : ["Aku", "Pasangan"];
+  const boxes = parts.map((p, i) => {
+    const t = p.tax; if (!t) return "";
+    let line = `Cukai anggaran: <b>${fmt(Math.round(t.payable))}</b>` + (t.zakat ? ` <small>(lepas zakat ${fmt(t.zakat)})</small>` : "") + (t.rebate ? ` <small>(rebat RM400)</small>` : "");
+    if (t.pcb !== null) {
+      const diff = t.pcb - t.payable;
+      line += diff >= 0 ? `<br>💰 Anggaran <b>refund ${fmt(Math.round(diff))}</b> (PCB ${fmt(t.pcb)})` : `<br>⚠️ Anggaran <b>kena bayar lagi ${fmt(Math.round(-diff))}</b> (PCB ${fmt(t.pcb)})`;
+    } else line += `<br><small>Isi PCB dalam "EA form" untuk anggar refund</small>`;
+    return `<div><small>${names[i]} · pendapatan bercukai ${fmt(Math.round(t.ci))}</small><div>${line}</div></div>`;
+  }).join("");
+  tb.innerHTML = boxes; tb.classList.toggle("hidden", !boxes);
+  $("#btnEA").classList.toggle("hidden", who === "all");
+
+  // Cadangan siapa patut claim (bila kedua-dua pendapatan ada)
+  let tip = "";
+  if (who === "all" && parts[0].tax && parts[1].tax && parts[0].tax.rate !== parts[1].tax.rate) {
+    const hi = parts[0].tax.rate > parts[1].tax.rate ? "Aku" : "Pasangan";
+    tip = `<div class="banner">💡 Untuk perbelanjaan keluarga yang boleh di-claim oleh sesiapa (cth: perubatan anak, SSPN, taska), claim bawah <b>${hi}</b> dulu — bracket ${Math.round(Math.max(parts[0].tax.rate, parts[1].tax.rate) * 100)}% vs ${Math.round(Math.min(parts[0].tax.rate, parts[1].tax.rate) * 100)}%, jimat lebih untuk setiap RM.</div>`;
+  }
+
+  const rate = parts.length === 1 && parts[0].tax ? parts[0].tax.rate : 0;
+  $("#cats").innerHTML = tip + rows.map(({ c, spent, eff, subs, left, pct, split }) => `
     <div class="cat ${pct >= 100 ? "full" : spent > 0 ? "part" : ""}">
       <div class="cathead"><span>${c.icon} <b>${c.name}</b></span><span>${fmt(eff)} / ${fmt(c.limit)}</span></div>
       <div class="bar"><div style="width:${pct}%"></div></div>
+      ${split ? `<small class="split">👤 ${fmt(split[0])} · 💑 ${fmt(split[1])}</small>` : ""}
       ${spent > eff + 0.005 ? `<small class="over">⚠️ Belanja ${fmt(spent)}, tapi hanya ${fmt(eff)} boleh dikira (had/sub-had penuh)</small>` : ""}
       ${subs.length ? `<div class="subs">${subs.map(sb => `<div class="sub ${sb.spent >= sb.limit ? "full" : ""}"><span>↳ ${sb.name}</span><span>${fmt(sb.eff)} / ${fmt(sb.limit)}${sb.spent >= sb.limit ? " ✅" : ""}</span></div>`).join("")}</div>` : ""}
       <div class="catfoot"><small>${c.desc}</small>
@@ -262,12 +324,18 @@ $("#addForm").onsubmit = async e => {
     date: $("#fDate").value,
     cat: $("#fCat").value,
     sub: $("#subWrap").classList.contains("hidden") ? "" : $("#fSub").value,
+    by: $("#fBy").value,
     for: $("#fFor").value,
     note: $("#fNote").value.trim(),
     img: currentImg || null,
     created: old ? old.created : Date.now(),
     updated: Date.now(),
   };
+  // Kesan duplicate: amaun sama + tarikh dekat (±3 hari) + nama kedai mirip
+  const norm = x => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
+  const dup = receipts.find(r => r.id !== rec.id && Math.abs(r.amount - rec.amount) < 0.01 &&
+    Math.abs(new Date(r.date) - new Date(rec.date)) <= 3 * 864e5 && (norm(r.merchant) === norm(rec.merchant) || r.date === rec.date));
+  if (dup && !confirm(`⚠️ Macam dah ada resit sama:\n${dup.merchant} · ${fmt(dup.amount)} · ${dup.date}\n\nSimpan juga?`)) return;
   // Gambar ditukar → fail lama dalam Drive ke Trash, upload yang baru
   if (old && imgChanged) { if (typeof Drive !== "undefined") await Drive.markDeleted(old); delete rec.driveId; }
   await DB.put(rec);
@@ -279,7 +347,8 @@ $("#addForm").onsubmit = async e => {
 };
 
 function resetForm() {
-  $("#addForm").reset(); $("#fDate").valueAsDate = new Date(); fillCats();
+  const lastBy = $("#fBy").value;
+  $("#addForm").reset(); $("#fBy").value = lastBy || "me"; $("#fDate").valueAsDate = new Date(); fillCats();
   currentImg = null; editingId = null; imgChanged = false; DB.setMeta("draftImg", null);
   showPreview(); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
   $("#addTitle").textContent = "Tambah resit"; $("#btnSave").textContent = "💾 Simpan"; $("#btnCancelEdit").classList.add("hidden");
@@ -292,7 +361,7 @@ function editReceipt(id) {
   editingId = id; imgChanged = false;
   $("#fMerchant").value = r.merchant; $("#fAmount").value = r.amount; $("#fDate").value = r.date;
   fillCats(); $("#fCat").value = r.cat; fillSubs(r.sub || "");
-  $("#fFor").value = r.for; $("#fNote").value = r.note || "";
+  $("#fFor").value = r.for; $("#fBy").value = byOf(r); $("#fNote").value = r.note || "";
   currentImg = r.img || null; showPreview();
   $("#addTitle").textContent = "✏️ Edit resit"; $("#btnSave").textContent = "💾 Simpan perubahan"; $("#btnCancelEdit").classList.remove("hidden");
   $("#ocrStatus").textContent = r.img ? "Nak tukar gambar? Pilih yang baru kat atas." : "Boleh tambah gambar/PDF kat atas.";
@@ -310,7 +379,7 @@ function renderList() {
   $("#list").innerHTML = yr.length ? yr.map(r => `
     <div class="item">
       ${r.img ? (isPdf(r.img) ? `<div data-pdf="${r.id}" class="thumb none">📄</div>` : `<img data-id="${r.id}" class="thumb">`) : `<label class="thumb none" title="Tambah gambar">📎<input type="file" accept="image/*,application/pdf" data-attach="${r.id}" hidden></label>`}
-      <div class="info" data-edit="${r.id}"><b>${esc(r.merchant)} <span class="pen">✏️</span></b><small>${cat(r.cat).icon} ${cat(r.cat).name}${r.sub ? " › " + esc(((cat(r.cat).subs || []).find(x => x.id === r.sub) || {}).name || r.sub) : ""} · ${r.for} · ${r.date}</small>${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
+      <div class="info" data-edit="${r.id}"><b>${esc(r.merchant)} <span class="pen">✏️</span></b><small>${cat(r.cat).icon} ${cat(r.cat).name}${byOf(r) === "sp" ? "💑 · " : ""}${r.sub ? " › " + esc(((cat(r.cat).subs || []).find(x => x.id === r.sub) || {}).name || r.sub) : ""} · ${r.for} · ${r.date}</small>${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
       <div class="amt">${fmt(r.amount)}<button class="del" data-id="${r.id}">🗑</button></div>
     </div>`).join("") : `<p class="note">Takde resit lagi untuk YA ${year}.</p>`;
   document.querySelectorAll(".thumb[data-id]").forEach(im => {
@@ -341,7 +410,7 @@ $("#btnExport").onclick = async () => {
   const zip = new JSZip();
   const data = receipts.map(({ img, ...r }) => ({ ...r, imgFile: img ? `resit/${r.date.slice(0, 4)}/${r.cat}/${r.date}_${slug(r.merchant)}_${r.id.slice(0, 6)}.${isPdf(img) ? "pdf" : "jpg"}` : null }));
   receipts.forEach((r, i) => r.img && zip.file(data[i].imgFile, r.img));
-  zip.file("data.json", JSON.stringify({ app: "resitku", v: 1, exported: new Date().toISOString(), income: await DB.getMeta("income"), receipts: data }, null, 2));
+  zip.file("data.json", JSON.stringify({ app: "resitku", v: 1, exported: new Date().toISOString(), income: await DB.getMeta("income"), income2: await DB.getMeta("income2"), ea: await allEA(), receipts: data }, null, 2));
   zip.file("ringkasan.csv", csv());
   const blob = await zip.generateAsync({ type: "blob" });
   const name = `ResitKu_backup_${new Date().toISOString().slice(0, 10)}.zip`;
@@ -368,6 +437,8 @@ $("#importIn").onchange = async e => {
       await DB.put({ ...rest, img });
     }
     if (meta.income) await DB.setMeta("income", meta.income);
+    if (meta.income2) await DB.setMeta("income2", meta.income2);
+    for (const k in (meta.ea || {})) await DB.setMeta(k, meta.ea[k]);
     receipts = await DB.all(); toast("Restore berjaya ✅"); init();
   } catch { toast("Fail ZIP tak sah"); }
   e.target.value = "";
@@ -382,3 +453,72 @@ function csv() {
 $("#btnCsv").onclick = () => download(new Blob([csv()], { type: "text/csv" }), `ResitKu_${year}.csv`);
 
 init();
+
+// ---------- EA FORM ----------
+async function allEA() {
+  const out = {};
+  for (let y = 2025; y <= new Date().getFullYear() + 1; y++) for (const w of ["me", "sp"]) { const v = await DB.getMeta(eaKey(y, w)); if (v) out[eaKey(y, w)] = v; }
+  return out;
+}
+window.allEA = allEA;
+$("#btnEA").onclick = async () => {
+  const ea = await getEA(year, who);
+  $("#eaWho").textContent = `${who === "me" ? "👤 Aku" : "💑 Pasangan"} · YA ${year}`;
+  $("#eaEpf").value = ea.epf || ""; $("#eaSocso").value = ea.socso || ""; $("#eaZakat").value = ea.zakat || ""; $("#eaPcb").value = ea.pcb ?? "";
+  $("#eaModal").classList.remove("hidden");
+};
+$("#eaSave").onclick = async () => {
+  await DB.setMeta(eaKey(year, who), { epf: +$("#eaEpf").value || 0, socso: +$("#eaSocso").value || 0, zakat: +$("#eaZakat").value || 0, pcb: $("#eaPcb").value === "" ? null : +$("#eaPcb").value });
+  $("#eaModal").classList.add("hidden"); toast("EA disimpan ✅"); renderDash();
+  window.afterSave && window.afterSave();
+};
+$("#eaClose").onclick = () => $("#eaModal").classList.add("hidden");
+
+// ---------- RINGKASAN e-FILING ----------
+let beText = "";
+$("#btnBE").onclick = async () => {
+  const ws = who === "all" ? ["me", "sp"] : [who];
+  let html = "", txt = "";
+  for (const w of ws) {
+    const p = await computeFor(w);
+    const nm = w === "me" ? "👤 Aku" : "💑 Pasangan";
+    const list = p.rows.filter(r => r.eff > 0).sort((a, b) => CFG.categories.indexOf(a.c) - CFG.categories.indexOf(b.c));
+    html += `<h4>${nm} — YA ${year}</h4><table class="be"><tr><td>Individu (auto)</td><td>${fmt(CFG.personal)}</td></tr>`;
+    txt += `${nm.replace(/^\S+ /, "")} — YA ${year}\nIndividu (auto): ${fmt(CFG.personal)}\n`;
+    for (const r of list) {
+      html += `<tr><td>${r.c.icon} ${r.c.name}</td><td>${fmt(r.eff)}</td></tr>`;
+      txt += `${r.c.name}: ${fmt(r.eff)}\n`;
+      for (const sb of r.subs.filter(x => x.eff > 0)) { html += `<tr class="besub"><td>↳ ${sb.name}</td><td>${fmt(sb.eff)}</td></tr>`; txt += `  - ${sb.name}: ${fmt(sb.eff)}\n`; }
+    }
+    html += `<tr class="betot"><td>Jumlah relief</td><td>${fmt(p.claimed + CFG.personal)}</td></tr>`;
+    txt += `Jumlah relief: ${fmt(p.claimed + CFG.personal)}\n`;
+    if (p.ea.zakat) { html += `<tr><td>🕌 Zakat (rebat)</td><td>${fmt(p.ea.zakat)}</td></tr>`; txt += `Zakat (rebat): ${fmt(p.ea.zakat)}\n`; }
+    if (p.tax) { html += `<tr><td>Cukai anggaran</td><td>${fmt(Math.round(p.tax.payable))}</td></tr>`; txt += `Cukai anggaran: ${fmt(Math.round(p.tax.payable))}\n`; }
+    html += "</table>"; txt += "\n";
+  }
+  html += `<p class="note">Masukkan setiap baris dalam bahagian Pelepasan di MyTax (e-BE). Nama item dalam borang mungkin berbeza sikit. Simpan resit 7 tahun. ⚠️ Rujukan sahaja.</p>`;
+  beText = txt;
+  $("#beBody").innerHTML = html; $("#beModal").classList.remove("hidden");
+};
+$("#beCopy").onclick = async () => { try { await navigator.clipboard.writeText(beText); toast("Disalin 📋"); } catch { toast("Tak dapat copy"); } };
+$("#beClose").onclick = () => $("#beModal").classList.add("hidden");
+["#eaModal", "#beModal"].forEach(id => $(id).onclick = e => { if (e.target.id === id.slice(1)) e.target.classList.add("hidden"); });
+
+// ---------- PERINGATAN KALENDAR (.ics) ----------
+$("#btnIcs").onclick = () => {
+  const y = new Date().getFullYear();
+  const ev = (d, title, desc) => {
+    const ds = d.replace(/-/g, "");
+    return `BEGIN:VEVENT\r\nUID:resitku-${ds}@azlanyusuff3.github.io\r\nDTSTAMP:${ds}T010000Z\r\nDTSTART;VALUE=DATE:${ds}\r\nSUMMARY:${title}\r\nDESCRIPTION:${desc}\r\nURL:https://azlanyusuff3.github.io/resitku/\r\nBEGIN:VALARM\r\nTRIGGER:PT9H\r\nACTION:DISPLAY\r\nDESCRIPTION:${title}\r\nEND:VALARM\r\nEND:VEVENT`;
+  };
+  const evs = [
+    ev(`${y}-12-01`, "ResitKu: semak baki relief cukai", "Sebulan lagi sebelum 31 Dis. Buka ResitKu & tengok kategori yang masih ada baki."),
+    ev(`${y}-12-15`, "ResitKu: 2 minggu lagi untuk relief cukai", "Gaya hidup, sukan, PRS, SSPN, insurans — habiskan baki yang memang nak beli."),
+    ev(`${y}-12-28`, "ResitKu: last call relief cukai!", "3 hari lagi. Pastikan semua resit dah masuk ResitKu & Drive."),
+    ev(`${y + 1}-03-01`, "ResitKu: e-Filing cukai dibuka", "Isi EA form dalam ResitKu, buka Ringkasan e-Filing & isi MyTax."),
+  ];
+  const ics = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ResitKu//MS\r\nCALSCALE:GREGORIAN\r\n${evs.join("\r\n")}\r\nEND:VCALENDAR\r\n`;
+  const blob = new Blob([ics], { type: "text/calendar" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ResitKu-peringatan.ics"; a.click();
+  toast("Buka fail tu & tekan Add All 📅");
+};

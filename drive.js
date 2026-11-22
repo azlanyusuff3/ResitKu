@@ -94,7 +94,7 @@ const Drive = (() => {
     for (const id of trash) { try { await api(`${API}/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) }); } catch {} }
     await DB.setMeta("driveTrash", []);
     // Data JSON (tanpa gambar)
-    const data = JSON.stringify({ app: "resitku", v: 1, synced: new Date().toISOString(), income: await DB.getMeta("income"),
+    const data = JSON.stringify({ app: "resitku", v: 1, synced: new Date().toISOString(), income: await DB.getMeta("income"), income2: await DB.getMeta("income2"), ea: window.allEA ? await window.allEA() : {},
       receipts: receipts.map(({ img, ...r }) => r) }, null, 2);
     const dataId = await DB.getMeta("driveDataId");
     let newId;
@@ -127,6 +127,8 @@ const Drive = (() => {
       onProgress && onProgress(++n, meta.receipts.length);
     }
     if (meta.income) await DB.setMeta("income", meta.income);
+    if (meta.income2) await DB.setMeta("income2", meta.income2);
+    for (const k in (meta.ea || {})) await DB.setMeta(k, meta.ea[k]);
     return meta.receipts.length;
   }
 

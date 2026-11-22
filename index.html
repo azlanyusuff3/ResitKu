@@ -26,6 +26,9 @@
 <main>
   <!-- DASHBOARD -->
   <section id="view-dash" class="view active">
+    <div class="whoTabs" id="whoTabs">
+      <button data-who="me" class="on">👤 Aku</button><button data-who="sp">💑 Pasangan</button><button data-who="all">👨‍👩‍👧 Semua</button>
+    </div>
     <div class="hero">
       <div>
         <small>Jumlah relief (bukan auto)</small>
@@ -42,6 +45,11 @@
     <div id="countdown" class="banner"></div>
     <div id="syncBanner" class="banner sync hidden"></div>
     <div id="backupWarn" class="banner warn hidden"></div>
+    <div id="taxBox" class="taxbox hidden"></div>
+    <div class="dashBtns">
+      <button id="btnEA" class="btn2">🧾 Isi dari EA form / payslip</button>
+      <button id="btnBE" class="btn2">📋 Ringkasan untuk e-Filing (BE)</button>
+    </div>
     <h2>Baki ikut kategori</h2>
     <div id="cats"></div>
     <p class="note" id="cfgNote"></p>
@@ -67,7 +75,10 @@
       <label>Tarikh <input id="fDate" type="date" required></label>
       <label>Kategori <select id="fCat"></select></label>
       <label id="subWrap" class="hidden">Jenis (sub-had) <select id="fSub"></select></label>
-      <label>Untuk siapa <select id="fFor">
+      <label>Siapa yang claim <select id="fBy">
+        <option value="me">👤 Aku</option><option value="sp">💑 Pasangan</option>
+      </select></label>
+      <label>Perbelanjaan untuk <select id="fFor">
         <option>Diri</option><option>Pasangan</option><option>Anak</option><option>Ibu bapa</option>
       </select></label>
       <label>Nota <input id="fNote" placeholder="cth: kasut futsal, ada sijil doktor"></label>
@@ -89,6 +100,12 @@
     <label>Anggaran pendapatan bercukai setahun (RM)
       <input id="income" type="number" inputmode="numeric" placeholder="cth: 80000">
     </label>
+    <label>Anggaran pendapatan pasangan setahun (RM) — kalau nak rancang claim bersama
+      <input id="income2" type="number" inputmode="numeric" placeholder="kosongkan kalau tak perlu">
+    </label>
+    <h2>📅 Peringatan</h2>
+    <p class="note">PWA tak boleh hantar notifikasi terjadual tanpa server, jadi peringatan dimasukkan terus ke Kalendar phone kau (1, 15 &amp; 28 Disember + Mac untuk e-Filing).</p>
+    <button id="btnIcs" class="btn2">📅 Tambah peringatan ke Kalendar</button>
     <p class="note">Guna untuk anggar berapa cukai dijimat. Disimpan dalam phone ni je.</p>
     <button id="btnInstall2" class="btn2 hidden">📲 Pasang app kat home screen</button>
     <h2>☁️ Google Drive sync</h2>
@@ -118,6 +135,29 @@
 </nav>
 
 <div id="toast"></div>
+
+<div id="eaModal" class="modal hidden">
+  <div class="sheet">
+    <h3>🧾 Dari EA form / payslip</h3>
+    <p class="note" id="eaWho"></p>
+    <label>KWSP (caruman pekerja setahun) <input id="eaEpf" type="number" inputmode="decimal" step="0.01"></label>
+    <label>PERKESO + SIP setahun <input id="eaSocso" type="number" inputmode="decimal" step="0.01"></label>
+    <label>Zakat / fitrah dibayar (rebat, tolak terus dari cukai) <input id="eaZakat" type="number" inputmode="decimal" step="0.01"></label>
+    <label>PCB / MTD dipotong setahun <input id="eaPcb" type="number" inputmode="decimal" step="0.01"></label>
+    <p class="note">Tip: Desember nanti, darab PCB bulanan × 12 untuk anggaran. Bila EA form keluar (Feb/Mac), betulkan nombor sebenar.</p>
+    <button id="eaSave">💾 Simpan</button>
+    <button id="eaClose" class="btn2">Tutup</button>
+  </div>
+</div>
+
+<div id="beModal" class="modal hidden">
+  <div class="sheet tall">
+    <h3>📋 Ringkasan e-Filing</h3>
+    <div id="beBody"></div>
+    <button id="beCopy">📋 Copy</button>
+    <button id="beClose" class="btn2">Tutup</button>
+  </div>
+</div>
 
 <div id="iosModal" class="modal hidden">
   <div class="sheet">

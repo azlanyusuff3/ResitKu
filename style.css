@@ -76,3 +76,20 @@ label.thumb.none { cursor: pointer; }
 .sub.full { color: #10b981; }
 .over { display: block; color: #b45309; font-size: 11px; margin-bottom: 4px; }
 .info { cursor: pointer; } .pen { font-size: 11px; opacity: .5; }
+
+.whoTabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.whoTabs button { margin: 0; padding: 8px; font-size: 13px; background: #e5e7eb; color: var(--tx); border-radius: 99px; }
+.whoTabs button.on { background: var(--p); color: #fff; }
+.taxbox { display: grid; gap: 8px; margin-top: 10px; }
+.taxbox > div { background: var(--card); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.taxbox small { color: var(--mut); }
+.dashBtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dashBtns button { font-size: 13px; padding: 12px 6px; margin: 10px 0 0; }
+.split { display: block; font-size: 11px; color: var(--mut); margin-bottom: 4px; }
+.sheet.tall { max-height: 85vh; overflow-y: auto; }
+.sheet label { display: block; margin: 8px 0; font-size: 13px; color: var(--mut); }
+table.be { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 10px; }
+table.be td { padding: 6px 4px; border-bottom: 1px solid #e5e7eb; } table.be td:last-child { text-align: right; font-weight: 700; white-space: nowrap; }
+table.be .besub td { font-size: 12px; color: var(--mut); padding-left: 14px; } table.be .betot td { border-top: 2px solid var(--p); font-weight: 800; }
+.sheet h4 { margin: 12px 0 6px; }
+@media (prefers-color-scheme: dark) { .whoTabs button { background: #374151; color: #fff; } table.be td { border-color: #374151; } }
