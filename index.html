@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#0a0a0c">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>ResitKu — Tracker Relief LHDN</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
@@ -16,7 +18,7 @@
 </head>
 <body>
 <header>
-  <h1>🧾 ResitKu</h1>
+  <h1><span class="logo">R</span>ResitKu</h1>
   <div class="hright">
     <button id="btnInstall" class="installbtn hidden">📲 Install</button>
     <select id="yearSel"></select>
@@ -29,6 +31,7 @@
     <div class="whoTabs" id="whoTabs">
       <button data-who="me" class="on">👤 Aku</button><button data-who="sp">💑 Pasangan</button><button data-who="all">👨‍👩‍👧 Semua</button>
     </div>
+    <div id="taxBox" class="taxbox hidden"></div>
     <div class="hero">
       <div>
         <small>Jumlah relief (bukan auto)</small>
@@ -45,7 +48,6 @@
     <div id="countdown" class="banner"></div>
     <div id="syncBanner" class="banner sync hidden"></div>
     <div id="backupWarn" class="banner warn hidden"></div>
-    <div id="taxBox" class="taxbox hidden"></div>
     <div class="dashBtns">
       <button id="btnEA" class="btn2">💵 Payslip / EA</button>
       <button id="btnProf" class="btn2">👨‍👩‍👧 Profil keluarga</button>
