@@ -14,8 +14,19 @@ Edit `reliefs.js` je setiap Belanjawan baru.
 ## Deploy
 GitHub Pages: Settings → Pages → Branch `main` / root.
 
+## Setup Google Drive (sekali je, ~10 minit)
+1. Buka https://console.cloud.google.com → **New Project** (nama: ResitKu)
+2. **APIs & Services → Library** → cari **Google Drive API** → Enable
+3. **OAuth consent screen** → External → isi nama app + email → Scopes: tambah `.../auth/drive.file` → **Test users**: tambah email kau & wife
+4. **Credentials → Create Credentials → OAuth client ID** → jenis **Web application**
+   - Authorized JavaScript origins: `https://azlanyusuff3.github.io`
+5. Copy **Client ID** → tampal dalam `config.js`
+6. Push → buka app → Tetapan → **Sambung Google Drive**
+
+> Mode Testing: max 100 test user (kena tambah email manual). Untuk 2–10 orang, cukup.
+
 ## Roadmap
-- [ ] Fasa 2: auto-backup ke Google Drive user sendiri (scope `drive.file`)
+- [x] Google Drive sync (scope `drive.file`, Drive user sendiri)
 - [ ] Import data pasangan (read-only) + cadangan siapa patut claim
 - [ ] Export ikut susunan borang BE
 

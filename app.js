@@ -94,6 +94,7 @@ async function renderDash() {
   const w = $("#backupWarn");
   const stale = receipts.length && (!last || Date.now() - last > 14 * 864e5);
   w.classList.toggle("hidden", !stale);
+  window.renderSyncBanner && window.renderSyncBanner();
   if (stale) w.innerHTML = `⚠️ ${last ? "Backup terakhir " + Math.floor((Date.now() - last) / 864e5) + " hari lepas" : "Belum pernah backup"}. <a href="#" onclick="show('set');return false">Backup sekarang</a>`;
 }
 
@@ -173,6 +174,7 @@ $("#addForm").onsubmit = async e => {
   currentImg = null; $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = "";
   toast("Resit disimpan ✅");
   show("dash");
+  window.afterSave && window.afterSave();
 };
 
 // ---------- LIST ----------
@@ -196,6 +198,7 @@ function renderList() {
   });
   document.querySelectorAll(".del").forEach(b => b.onclick = async () => {
     if (!confirm("Padam resit ni?")) return;
+    const gone = receipts.find(r => r.id === b.dataset.id); if (typeof Drive !== "undefined") await Drive.markDeleted(gone);
     await DB.del(b.dataset.id); receipts = receipts.filter(r => r.id !== b.dataset.id); renderList(); toast("Dipadam");
   });
 }

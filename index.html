@@ -40,6 +40,7 @@
     </div>
     <div id="installBanner" class="banner install hidden">📲 <b>Pasang ResitKu kat home screen</b> — buka macam app, data lebih selamat. <a href="#" id="installLink">Pasang sekarang</a> <a href="#" id="installDismiss" class="x">✕</a></div>
     <div id="countdown" class="banner"></div>
+    <div id="syncBanner" class="banner sync hidden"></div>
     <div id="backupWarn" class="banner warn hidden"></div>
     <h2>Baki ikut kategori</h2>
     <div id="cats"></div>
@@ -82,6 +83,15 @@
     </label>
     <p class="note">Guna untuk anggar berapa cukai dijimat. Disimpan dalam phone ni je.</p>
     <button id="btnInstall2" class="btn2 hidden">📲 Pasang app kat home screen</button>
+    <h2>☁️ Google Drive sync</h2>
+    <div id="driveBox" class="drivebox">
+      <div id="driveStatus" class="note">Belum sambung.</div>
+      <button id="btnDriveConnect">🔗 Sambung Google Drive</button>
+      <button id="btnDriveSync" class="btn2 hidden">🔄 Sync sekarang</button>
+      <button id="btnDriveRestore" class="btn2 hidden">⬇️ Restore dari Drive (phone baru)</button>
+      <button id="btnDriveOff" class="btn2 hidden">Putuskan sambungan</button>
+      <p class="note">Resit akan disimpan dalam Drive <b>kau sendiri</b> di folder <code>ResitKu/tahun/kategori/</code>. App cuma nampak fail yang dia cipta, bukan fail lain dalam Drive kau.</p>
+    </div>
     <h2>Backup & data</h2>
     <p class="note">Semua data & gambar resit simpan dalam phone ni sahaja. Takde server. Buat backup dan simpan di mana kau suka (Google Drive, OneDrive, WhatsApp diri sendiri...).</p>
     <button id="btnExport">📦 Backup (ZIP)</button>
@@ -111,9 +121,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
 <script src="reliefs.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
 <script src="install.js"></script>
+<script src="drive.js"></script>
+<script src="sync-ui.js"></script>
 </body>
 </html>
