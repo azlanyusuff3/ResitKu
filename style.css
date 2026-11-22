@@ -68,3 +68,5 @@ nav button span { display: block; font-size: 10px; } nav button.on { color: var(
 .scanrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .scanrow .scanbtn { margin: 10px 0; padding: 20px 8px; font-size: 15px; }
 .scanbtn.alt { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+
+label.thumb.none { cursor: pointer; }

@@ -43,6 +43,8 @@ async function init() {
   $("#income").value = (await DB.getMeta("income")) || "";
   $("#income").onchange = async e => { await DB.setMeta("income", +e.target.value || 0); renderDash(); };
   $("#cfgNote").textContent = CFG.note;
+  const draft = await DB.getMeta("draftImg");
+  if (draft && !currentImg) { currentImg = draft; showPreview(); $("#ocrStatus").textContent = "📎 Gambar resit tadi masih ada — isi butiran & simpan."; show("add"); }
   renderDash();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
@@ -101,29 +103,42 @@ async function renderDash() {
 // ---------- OCR ----------
 $("#fileIn").onchange = $("#galleryIn").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  currentImg = await compress(f);
-  const p = $("#preview"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden");
+  currentImg = await compress(f, 1400, 0.7);
+  await DB.setMeta("draftImg", currentImg); // simpan terus — kalau iOS reload page, gambar tak hilang
+  showPreview();
+  runOCR(f);
+};
+function showPreview() { const p = $("#preview"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden"); }
+
+// OCR ringan: English sahaja, gambar kecil & grayscale (jimat memory iPhone)
+let ocrWorker = null;
+async function runOCR(file) {
   if (!window.Tesseract) { $("#ocrStatus").textContent = "OCR tak dapat load (offline?) — isi manual."; return; }
-  $("#ocrStatus").textContent = "🔍 Membaca resit...";
+  $("#ocrStatus").textContent = "🔍 Sediakan OCR (kali pertama ambil masa sikit)...";
   try {
-    const { data } = await Tesseract.recognize(currentImg, "eng+msa", {
+    const img = await compress(file, 1200, 0.85, true);
+    if (!ocrWorker) ocrWorker = await Tesseract.createWorker("eng", 1, {
       logger: m => m.status === "recognizing text" && ($("#ocrStatus").textContent = `🔍 Membaca resit... ${Math.round(m.progress * 100)}%`)
     });
-    parseReceipt(data.text);
-    $("#ocrStatus").textContent = "✅ Siap — semak & betulkan kalau salah.";
-  } catch (err) { $("#ocrStatus").textContent = "OCR gagal — isi manual."; }
-};
+    const { data } = await ocrWorker.recognize(img);
+    const got = parseReceipt(data.text);
+    $("#ocrStatus").textContent = got ? "✅ Siap — semak & betulkan kalau salah." : "😕 OCR tak jumpa amaun — isi manual. (Cuba gambar lebih terang & lurus)";
+  } catch (err) {
+    $("#ocrStatus").textContent = "OCR gagal (" + (err && err.message || err) + ") — isi manual.";
+  }
+}
 
 function parseReceipt(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const low = text.toLowerCase();
   // Amaun: cari baris TOTAL dulu, kalau tak jumpa ambil nombor RM terbesar
-  const num = s => { const m = s.replace(/,/g, "").match(/(\d+\.\d{2})/g); return m ? m.map(Number) : []; };
+  const num = s => { const m = s.replace(/(\d),(\d{3})/g, "$1$2").replace(/(\d)\s*[,]\s*(\d{2})\b/g, "$1.$2").match(/(\d+\.\s?\d{2})/g); return m ? m.map(x => Number(x.replace(/\s/g, ""))).filter(n => n < 100000) : []; };
   let amt = 0;
   const totLine = lines.filter(l => /(grand\s*total|total|jumlah|amount due|net)/i.test(l) && !/sub\s*total|tax|sst|rounding/i.test(l));
   for (const l of totLine) { const n = num(l); if (n.length) amt = Math.max(amt, ...n); }
   if (!amt) { const all = lines.flatMap(num); if (all.length) amt = Math.max(...all); }
   if (amt) $("#fAmount").value = amt.toFixed(2);
+  const found = !!amt;
   // Tarikh
   const dm = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (dm) {
@@ -136,18 +151,22 @@ function parseReceipt(text) {
   // Kategori dari keyword
   const hit = CFG.categories.find(c => c.keywords.some(k => low.includes(k)));
   if (hit) $("#fCat").value = hit.id;
+  return found;
 }
 
-// Kecilkan gambar (jimat storage) — max 1400px, JPEG 0.7
-function compress(file) {
+// Kecilkan gambar (jimat storage). gray=true untuk OCR.
+function compress(file, max = 1400, q = 0.7, gray = false) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      const s = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const sc = Math.min(1, max / Math.max(img.width, img.height));
       const cv = document.createElement("canvas");
-      cv.width = img.width * s; cv.height = img.height * s;
-      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
-      cv.toBlob(b => res(b || file), "image/jpeg", 0.7);
+      cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+      const cx = cv.getContext("2d");
+      if (gray) cx.filter = "grayscale(1) contrast(1.4)";
+      cx.drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(img.src);
+      cv.toBlob(b => res(b || file), "image/jpeg", q);
     };
     img.onerror = () => res(file);
     img.src = URL.createObjectURL(file);
@@ -171,7 +190,7 @@ $("#addForm").onsubmit = async e => {
   await DB.put(rec);
   receipts.push(rec);
   e.target.reset(); $("#fDate").valueAsDate = new Date();
-  currentImg = null; $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
+  currentImg = null; DB.setMeta("draftImg", null); $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
   toast("Resit disimpan ✅");
   show("dash");
   window.afterSave && window.afterSave();
@@ -187,7 +206,7 @@ function renderList() {
     .sort((a, b) => b.date.localeCompare(a.date));
   $("#list").innerHTML = yr.length ? yr.map(r => `
     <div class="item">
-      ${r.img ? `<img data-id="${r.id}" class="thumb">` : `<div class="thumb none">🧾</div>`}
+      ${r.img ? `<img data-id="${r.id}" class="thumb">` : `<label class="thumb none" title="Tambah gambar">📎<input type="file" accept="image/*" data-attach="${r.id}" hidden></label>`}
       <div class="info"><b>${esc(r.merchant)}</b><small>${cat(r.cat).icon} ${cat(r.cat).name} · ${r.for} · ${r.date}</small>${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
       <div class="amt">${fmt(r.amount)}<button class="del" data-id="${r.id}">🗑</button></div>
     </div>`).join("") : `<p class="note">Takde resit lagi untuk YA ${year}.</p>`;
@@ -195,6 +214,13 @@ function renderList() {
     const r = receipts.find(x => x.id === im.dataset.id);
     im.src = URL.createObjectURL(r.img);
     im.onclick = () => window.open(im.src);
+  });
+  document.querySelectorAll("[data-attach]").forEach(inp => inp.onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = receipts.find(x => x.id === inp.dataset.attach);
+    r.img = await compress(f, 1400, 0.7); delete r.driveId;
+    await DB.put(r); toast("Gambar ditambah 📎"); renderList();
+    window.afterSave && window.afterSave();
   });
   document.querySelectorAll(".del").forEach(b => b.onclick = async () => {
     if (!confirm("Padam resit ni?")) return;

@@ -7,14 +7,18 @@
     const connected = await DB.getMeta("driveOn");
     const last = await DB.getMeta("lastSync");
     const pend = receipts.filter(r => r.img && !r.driveId).length;
+    const noImg = receipts.filter(r => !r.img).length;
     el("#btnDriveConnect").classList.toggle("hidden", !!connected);
     ["#btnDriveSync", "#btnDriveRestore", "#btnDriveOff"].forEach(s => el(s).classList.toggle("hidden", !connected));
     if (!Drive.hasClientId()) {
       el("#driveStatus").innerHTML = "⚙️ Belum setup Google Client ID (lihat README).";
       el("#btnDriveConnect").disabled = true;
     } else if (connected) {
-      el("#driveStatus").innerHTML = `✅ Disambung${last ? " · sync terakhir " + new Date(last).toLocaleString("ms-MY") : ""}${pend ? ` · <b>${pend} resit belum sync</b>` : " · semua dah sync"}`;
+      el("#driveStatus").innerHTML = `✅ Disambung${last ? " · sync terakhir " + new Date(last).toLocaleString("ms-MY") : ""}${pend ? ` · <b>${pend} resit belum sync</b>` : " · semua dah sync"}${noImg ? ` · ${noImg} resit takde gambar (tekan 📎 dalam senarai Resit)` : ""}`;
     } else el("#driveStatus").textContent = "Belum sambung.";
+    const err = await DB.getMeta("lastSyncErr");
+    if (connected && err) el("#driveStatus").innerHTML += `<br>⚠️ ${err}`;
+    if (connected && !Drive.valid()) el("#driveStatus").innerHTML += "<br>🔑 Sesi Google tamat — tekan Sync sekarang untuk login semula.";
     renderSyncBanner();
   }
 
@@ -38,13 +42,15 @@
   async function doSync(interactive) {
     if (busy) return; busy = true;
     try {
-      if (!(await ensureToken(interactive))) { refresh(); return; }
+      if (!(await ensureToken(interactive))) { busy = false; refresh(); return; }
+      await DB.setMeta("lastSyncErr", null);
       el("#driveStatus").textContent = "🔄 Sync...";
       const n = await Drive.sync(receipts, (i, t) => el("#driveStatus").textContent = `🔄 Upload ${i}/${t}...`);
       if (interactive || n) toast(n ? `☁️ ${n} resit masuk Drive` : "☁️ Semua dah sync");
     } catch (e) {
-      toast(e.message === "auth" ? "Sesi Google tamat — tekan Sync sekarang" : "Sync gagal, cuba lagi");
-    } finally { busy = false; refresh(); renderDash(); }
+      const msg = e.message === "auth" ? "Sesi Google tamat — tekan Sync sekarang" : "Sync gagal: " + e.message;
+      toast(msg); await DB.setMeta("lastSyncErr", msg);
+    } finally { busy = false; await refresh(); renderDash(); }
   }
 
   // Dipanggil oleh app.js lepas simpan resit — auto-sync kalau token masih sah (tak perlu popup)
