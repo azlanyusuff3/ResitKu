@@ -169,3 +169,13 @@ table.be .betot td { color: var(--gold2); font-weight: 800; font-size: 15px; bor
 @media (display-mode: standalone) {
   :root[data-theme="light"] header { box-shadow: inset 0 env(safe-area-inset-top) 0 0 #16161b; }
 }
+
+/* Skrin selamat datang */
+.welcome { position: fixed; inset: 0; z-index: 40; background: radial-gradient(120% 70% at 80% 0%, rgba(232,184,74,.18), transparent 60%), var(--bg); display: flex; align-items: center; justify-content: center; padding: 24px; padding-top: calc(env(safe-area-inset-top) + 24px); overflow-y: auto; }
+.wbox { max-width: 400px; width: 100%; text-align: center; }
+.wlogo { width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 12px 40px rgba(232,184,74,.25); }
+.wbox h1 { font-size: 30px; font-weight: 800; letter-spacing: -.6px; margin: 16px 0 6px; }
+.wsub { color: var(--mut); margin: 0 0 22px; line-height: 1.5; }
+.wlist { list-style: none; padding: 16px; margin: 0 0 22px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); text-align: left; font-size: 14px; line-height: 2.1; }
+.gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f1f1f !important; border: 1px solid #dadce0; }
+.gbtn .g { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0); font-size: 13px; }

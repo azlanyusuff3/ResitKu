@@ -125,6 +125,7 @@
     <button id="btnInstall2" class="btn2 hidden">📲 Pasang app kat home screen</button>
     <h2>☁️ Google Drive sync</h2>
     <div id="driveBox" class="drivebox">
+      <div id="driveUser" class="note"></div>
       <div id="driveStatus" class="note">Belum sambung.</div>
       <button id="btnDriveConnect">🔗 Sambung Google Drive</button>
       <button id="btnDriveSync" class="btn2 hidden">🔄 Sync sekarang</button>
@@ -150,6 +151,23 @@
 </nav>
 
 <div id="toast"></div>
+
+<div id="welcome" class="welcome hidden">
+  <div class="wbox">
+    <img src="icon-192.png" class="wlogo" alt="">
+    <h1>ResitKu</h1>
+    <p class="wsub">Jejak resit & relief cukai LHDN. Data kau, dalam Google Drive kau sendiri.</p>
+    <ul class="wlist">
+      <li>📸 Scan resit & payslip</li>
+      <li>📊 Tengok baki setiap relief</li>
+      <li>💰 Anggar refund cukai</li>
+      <li>☁️ Backup auto ke Drive kau — tukar phone pun tak hilang</li>
+    </ul>
+    <button id="wGoogle" class="gbtn"><span class="g">G</span> Log masuk dengan Google</button>
+    <button id="wSkip" class="btn2">Guna tanpa login (simpan dalam phone je)</button>
+    <p class="note">App cuma nampak fail yang dia cipta dalam Drive kau. <a href="privacy.html">Privasi</a></p>
+  </div>
+</div>
 
 <div id="eaModal" class="modal hidden">
   <div class="sheet">

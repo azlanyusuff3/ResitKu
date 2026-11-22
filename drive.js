@@ -143,5 +143,10 @@ const Drive = (() => {
     token = null; expiry = 0; try { localStorage.removeItem("gtok"); } catch {}
   }
 
-  return { justConnected: () => justConnected, authError: () => authError, redirectUri: REDIRECT, ready, valid, connect, sync, restore, markDeleted, disconnect, hasClientId: () => !!clientId() };
+  async function whoami() {
+    if (!valid()) return null;
+    try { const r = await api("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName,photoLink)"); return r.user; } catch { return null; }
+  }
+
+  return { whoami, justConnected: () => justConnected, authError: () => authError, redirectUri: REDIRECT, ready, valid, connect, sync, restore, markDeleted, disconnect, hasClientId: () => !!clientId() };
 })();

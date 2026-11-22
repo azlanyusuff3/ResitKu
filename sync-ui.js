@@ -5,6 +5,8 @@
 
   async function refresh() {
     const connected = await DB.getMeta("driveOn");
+    const u = await DB.getMeta("driveUser");
+    el("#driveUser").innerHTML = connected && u ? `👤 <b>${u.displayName || ""}</b> · ${u.emailAddress}` : "";
     const last = await DB.getMeta("lastSync");
     const pend = receipts.filter(r => r.img && !r.driveId).length;
     const noImg = receipts.filter(r => !r.img).length;
@@ -78,13 +80,27 @@
   };
   el("#btnDriveOff").onclick = async () => {
     if (!confirm("Putuskan sambungan Drive? Fail dalam Drive tak dipadam.")) return;
-    Drive.disconnect(); await DB.setMeta("driveOn", false); refresh();
+    Drive.disconnect(); await DB.setMeta("driveOn", false); await DB.setMeta("driveUser", null); refresh();
   };
+
+  // Skrin selamat datang: tunjuk kalau belum login & belum pilih "tanpa login"
+  (async () => {
+    const on = await DB.getMeta("driveOn"), skip = await DB.getMeta("skipLogin");
+    if (!on && !skip && !Drive.justConnected() && !Drive.authError()) el("#welcome").classList.remove("hidden");
+  })();
+  el("#wGoogle").onclick = () => {
+    if (!Drive.ready()) return toast("Login Google belum disetup");
+    el("#wGoogle").textContent = "↗️ Membuka Google...";
+    Drive.connect(true);
+  };
+  el("#wSkip").onclick = async () => { await DB.setMeta("skipLogin", true); el("#welcome").classList.add("hidden"); };
 
   // Tunggu receipts load dulu, lepas tu handle balik dari login Google
   setTimeout(async () => {
     if (Drive.justConnected()) {
       await DB.setMeta("driveOn", true);
+      el("#welcome").classList.add("hidden");
+      Drive.whoami().then(async u => { if (u) { await DB.setMeta("driveUser", u); refresh(); } });
       let next = null; try { next = localStorage.getItem("afterLogin"); localStorage.removeItem("afterLogin"); } catch {}
       show("set");
       // Phone kosong (baru install / tukar phone) → tarik semua dari Drive dulu
