@@ -285,12 +285,30 @@ function parseReceipt(text) {
   // Kategori dari keyword
   fillCats();
   const yy = +($("#fDate").value || "").slice(0, 4) || year;
-  const hit = reliefFor(yy).categories.find(c => c.keywords.some(k => low.includes(k)));
+  const hit = guessCat(low, reliefFor(yy).categories);
   if (hit) { $("#fCat").value = hit.id; fillSubs(); }
   // Teka sub-had dari teks
   const subHints = { dental: /dental|gigi|pergigian/, vaccine: /vaksin|vaccin|immuni/, checkup: /check.?up|pemeriksaan|screening|health screen|psych|kaunsel/, upskill: /course|kursus|workshop|certificat|bootcamp|udemy|coursera/, life: /life|takaful|hayat/, epf: /kwsp|epf/, shoes: /shoe|kasut|sneaker|footwear/ };
   for (const o of $("#fSub").options) if (o.value && subHints[o.value] && subHints[o.value].test(low)) { $("#fSub").value = o.value; break; }
   return found;
+}
+
+// Teka kategori ikut skor: keyword pendek (≤4 huruf) mesti perkataan penuh,
+// keyword panjang dapat skor lebih tinggi, nama kedai (baris atas) dapat bonus.
+function guessCat(low, cats) {
+  const head = low.split("\n").slice(0, 4).join(" ");
+  const esc = k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let best = null, bestScore = 0;
+  for (const c of cats) {
+    let score = 0;
+    for (const k of c.keywords) {
+      const kk = k.trim();
+      const re = kk.length <= 4 ? new RegExp(`(^|[^a-z0-9])${esc(kk)}([^a-z0-9]|$)`) : new RegExp(esc(kk));
+      if (re.test(low)) score += Math.min(kk.length, 10) + (re.test(head) ? 5 : 0);
+    }
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+  return bestScore >= 4 ? best : null; // terlalu lemah → biar user pilih
 }
 
 // Kecilkan gambar (jimat storage). gray=true untuk OCR.

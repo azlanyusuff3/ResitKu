@@ -9,7 +9,7 @@ const YA2026 = {
   categories: [
     { id: "lifestyle", name: "Gaya Hidup", limit: 2500, icon: "📱",
       desc: "Buku, majalah, smartphone, tablet, komputer, internet, kursus upskilling",
-      keywords: ["popular", "mph", "kinokuniya", "apple", "samsung", "huawei", "xiaomi", "laptop", "book", "buku", "unifi", "maxis", "celcom", "digi", "umobile", "time fibre", "harvey norman", "senheng", "machines"] },
+      keywords: ["popular", "mph", "kinokuniya", "bookxcess", "harris", "borders", "times bookstore", "bookstore", "kedai buku", "isbn", "novel", "majalah", "magazine", "ebook", "kindle", "dbp", "dewan bahasa", "apple", "samsung", "huawei", "xiaomi", "laptop", "books", "buku", "unifi", "maxis", "celcom", "digi", "umobile", "time fibre", "harvey norman", "senheng", "machines"] },
     { id: "sports", name: "Sukan", limit: 1000, icon: "🏸",
       desc: "Peralatan sukan, yuran gym, sewa gelanggang, yuran pertandingan (diri, pasangan, anak, ibu bapa)",
       keywords: ["decathlon", "sports", "gym", "fitness", "badminton", "futsal", "anytime fitness", "celebrity fitness", "al-ikhsan", "running", "court"] },
