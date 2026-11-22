@@ -15,15 +15,19 @@ const YA2026 = {
       keywords: ["decathlon", "sports", "gym", "fitness", "badminton", "futsal", "anytime fitness", "celebrity fitness", "al-ikhsan", "running", "court"] },
     { id: "medical", name: "Perubatan (diri/pasangan/anak)", limit: 10000, icon: "🏥",
       desc: "Penyakit serius, fertiliti, semua vaksin berdaftar NPRA & gigi & pemeriksaan penuh/mental health (RM1,000 setiap satu), anak kurang upaya pembelajaran (sub-had RM10,000)",
+      subs: [{ id: "dental", name: "Rawatan gigi", limit: 1000 }, { id: "vaccine", name: "Vaksin", limit: 1000 }, { id: "checkup", name: "Pemeriksaan penuh / mental health / kit ujian", limit: 1000 }, { id: "learning", name: "Anak kurang upaya pembelajaran", limit: 10000 }],
       keywords: ["hospital", "klinik", "clinic", "dental", "pergigian", "medical", "pharmacy", "farmasi", "vaksin", "vaccine", "kpj", "pantai", "columbia", "sunway medical", "guardian", "watsons", "caring"] },
     { id: "parents_medical", name: "Perubatan Ibu Bapa/Datuk Nenek", limit: 8000, icon: "👵",
       desc: "Rawatan, penjagaan, pemeriksaan & vaksin ibu bapa / datuk nenek",
+      subs: [{ id: "checkup", name: "Pemeriksaan penuh & vaksin", limit: 1000 }],
       keywords: [] },
     { id: "education_self", name: "Pendidikan Diri", limit: 7000, icon: "🎓",
       desc: "Yuran diploma/ijazah/sarjana/PhD, kursus upskilling (sub-had RM2,000)",
+      subs: [{ id: "upskill", name: "Kursus upskilling / kemahiran", limit: 2000 }],
       keywords: ["university", "universiti", "college", "kolej", "yuran", "tuition fee", "uitm", "oum", "unitar"] },
     { id: "epf_life", name: "KWSP + Insurans Hayat", limit: 7000, icon: "🛡️",
       desc: "KWSP/pencen (RM4,000) + insurans hayat/takaful diri, pasangan & anak (RM3,000)",
+      subs: [{ id: "epf", name: "KWSP / pencen", limit: 4000 }, { id: "life", name: "Insurans hayat / takaful", limit: 3000 }], subsOnly: true,
       keywords: ["life insurance", "takaful", "great eastern", "prudential", "aia", "allianz life", "etiqa", "kwsp", "epf"] },
     { id: "edu_med_insurance", name: "Insurans Pendidikan & Perubatan", limit: 4000, icon: "📋",
       desc: "Premium insurans pendidikan / perubatan (diri, pasangan, anak)",
@@ -73,6 +77,7 @@ life.desc = "Buku, smartphone, tablet, komputer, internet, upskilling + BARU: la
 life.keywords.push("openai", "chatgpt", "gemini", "claude", "anthropic", "copilot", "midjourney", "perplexity", "cursor", "grammarly", "veterinar", "vet ", "klinik haiwan", "animal clinic", "spca", "pet adoption");
 const sport = YA2027.categories.find(c => c.id === "sports");
 sport.desc += " + BARU: kasut sukan (sub-had RM300)";
+sport.subs = [{ id: "shoes", name: "Kasut sukan", limit: 300 }];
 sport.keywords.push("nike", "adidas", "asics", "skechers", "puma", "new balance", "hoka");
 
 window.RELIEF_YEARS = { 2026: YA2026, 2027: YA2027 };

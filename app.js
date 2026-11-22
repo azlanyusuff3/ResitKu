@@ -3,6 +3,8 @@ const $ = s => document.querySelector(s);
 const fmt = n => "RM" + Number(n || 0).toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 let receipts = [];
 let currentImg = null;
+let editingId = null, imgChanged = false;
+const isPdf = b => b && (b.type === "application/pdf" || (b.name || "").toLowerCase().endsWith(".pdf"));
 let year = new Date().getFullYear();
 
 function taxOn(ci) {
@@ -37,6 +39,7 @@ async function init() {
   $("#yearSel").onchange = e => { year = +e.target.value; setReliefYA(year); $("#cfgNote").textContent = CFG.note; renderDash(); renderList(); };
   fillCats();
   $("#fDate").onchange = fillCats;
+  $("#fCat").onchange = () => fillSubs();
   $("#fDate").valueAsDate = new Date(); fillCats();
   $("#income").value = (await DB.getMeta("income")) || "";
   $("#income").onchange = async e => { await DB.setMeta("income", +e.target.value || 0); renderDash(); };
@@ -53,10 +56,16 @@ async function renderDash() {
   const income = +(await DB.getMeta("income")) || 0;
   let claimed = 0, totalLimit = 0;
   const rows = CFG.categories.map(c => {
-    const spent = yr.filter(r => r.cat === c.id).reduce((s, r) => s + r.amount, 0);
-    const eff = Math.min(spent, c.limit);
+    const rs = yr.filter(r => r.cat === c.id);
+    const spent = rs.reduce((s, r) => s + r.amount, 0);
+    const subs = (c.subs || []).map(sb => {
+      const sp = rs.filter(r => r.sub === sb.id).reduce((s, r) => s + r.amount, 0);
+      return { ...sb, spent: sp, eff: Math.min(sp, sb.limit) };
+    });
+    const other = rs.filter(r => !r.sub || !subs.some(sb => sb.id === r.sub)).reduce((s, r) => s + r.amount, 0);
+    const eff = Math.min(subs.reduce((s, sb) => s + sb.eff, 0) + other, c.limit);
     claimed += eff; totalLimit += c.limit;
-    return { c, spent, eff, left: Math.max(c.limit - spent, 0), pct: Math.min(spent / c.limit * 100, 100) };
+    return { c, spent, eff, subs, left: Math.max(c.limit - eff, 0), pct: Math.min(eff / c.limit * 100, 100) };
   });
   // Susun: yang ada baki & dah mula guna dulu (peluang paling dekat), kemudian yang belum sentuh
   rows.sort((a, b) => (b.spent > 0) - (a.spent > 0) || (a.pct === 100) - (b.pct === 100) || b.left - a.left);
@@ -74,10 +83,12 @@ async function renderDash() {
   }
 
   const rate = income > 0 ? marginal(Math.max(income - CFG.personal - claimed, 0)) : 0;
-  $("#cats").innerHTML = rows.map(({ c, spent, left, pct }) => `
+  $("#cats").innerHTML = rows.map(({ c, spent, eff, subs, left, pct }) => `
     <div class="cat ${pct >= 100 ? "full" : spent > 0 ? "part" : ""}">
-      <div class="cathead"><span>${c.icon} <b>${c.name}</b></span><span>${fmt(spent)} / ${fmt(c.limit)}</span></div>
+      <div class="cathead"><span>${c.icon} <b>${c.name}</b></span><span>${fmt(eff)} / ${fmt(c.limit)}</span></div>
       <div class="bar"><div style="width:${pct}%"></div></div>
+      ${spent > eff + 0.005 ? `<small class="over">⚠️ Belanja ${fmt(spent)}, tapi hanya ${fmt(eff)} boleh dikira (had/sub-had penuh)</small>` : ""}
+      ${subs.length ? `<div class="subs">${subs.map(sb => `<div class="sub ${sb.spent >= sb.limit ? "full" : ""}"><span>↳ ${sb.name}</span><span>${fmt(sb.eff)} / ${fmt(sb.limit)}${sb.spent >= sb.limit ? " ✅" : ""}</span></div>`).join("")}</div>` : ""}
       <div class="catfoot"><small>${c.desc}</small>
       <small class="left">${pct >= 100 ? "✅ Penuh" : `Baki ${fmt(left)}${rate ? ` · jimat ~${fmt(Math.round(left * rate))}` : ""}`}</small></div>
     </div>`).join("");
@@ -101,10 +112,14 @@ async function renderDash() {
 // ---------- OCR ----------
 $("#fileIn").onchange = $("#galleryIn").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  currentImg = await compress(f, 1400, 0.7);
+  if (isPdf(f)) {
+    if (f.size > 8e6) return toast("PDF terlalu besar (max 8MB)");
+    currentImg = new Blob([await f.arrayBuffer()], { type: "application/pdf" });
+  } else currentImg = await compress(f, 1400, 0.7);
+  imgChanged = true;
   await DB.setMeta("draftImg", currentImg); // simpan terus — kalau iOS reload page, gambar tak hilang
   showPreview();
-  runOCR(f);
+  isPdf(currentImg) ? readPDF(currentImg) : runOCR(f);
 };
 // Kategori dalam borang ikut tahun tarikh resit
 function fillCats() {
@@ -112,8 +127,60 @@ function fillCats() {
   const keep = $("#fCat").value;
   $("#fCat").innerHTML = reliefFor(y).categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join("");
   if ([...$("#fCat").options].some(o => o.value === keep)) $("#fCat").value = keep;
+  fillSubs();
 }
-function showPreview() { const p = $("#preview"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden"); }
+function fillSubs(keep) {
+  const y = +($("#fDate").value || "").slice(0, 4) || new Date().getFullYear();
+  const c = reliefFor(y).categories.find(x => x.id === $("#fCat").value);
+  const subs = (c && c.subs) || [];
+  $("#subWrap").classList.toggle("hidden", !subs.length);
+  $("#fSub").innerHTML = (c && c.subsOnly ? "" : `<option value="">Umum / lain-lain</option>`) + subs.map(sb => `<option value="${sb.id}">${sb.name} (had ${fmt(sb.limit)})</option>`).join("");
+  if (keep !== undefined && [...$("#fSub").options].some(o => o.value === keep)) $("#fSub").value = keep;
+}
+function showPreview() {
+  const p = $("#preview"), d = $("#pdfPreview");
+  if (!currentImg) { p.classList.add("hidden"); d.classList.add("hidden"); return; }
+  if (isPdf(currentImg)) {
+    p.classList.add("hidden"); d.classList.remove("hidden");
+    d.innerHTML = `📄 Resit PDF (${Math.round(currentImg.size / 1024)} KB) — <a href="${URL.createObjectURL(currentImg)}" target="_blank">buka</a>`;
+  } else { d.classList.add("hidden"); p.src = URL.createObjectURL(currentImg); p.classList.remove("hidden"); }
+}
+
+// PDF: ambil teks terus (e-invoice); kalau PDF scan (takde teks), render page 1 & OCR
+function loadScript(src) { return new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); }); }
+async function readPDF(blob) {
+  $("#ocrStatus").textContent = "📄 Membaca PDF...";
+  try {
+    if (!window.pdfjsLib) {
+      await loadScript("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+    const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+    let text = "";
+    for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+      const pg = await pdf.getPage(i);
+      const tc = await pg.getTextContent();
+      // susun ikut baris (y)
+      const lines = {};
+      tc.items.forEach(it => { const y = Math.round(it.transform[5]); (lines[y] = lines[y] || []).push(it.str); });
+      text += Object.keys(lines).sort((a, b) => b - a).map(y => lines[y].join(" ")).join("\n") + "\n";
+    }
+    if (text.replace(/\s/g, "").length > 20) {
+      const got = parseReceipt(text);
+      $("#ocrStatus").textContent = got ? "✅ PDF dibaca — semak & betulkan kalau salah." : "😕 Tak jumpa amaun dalam PDF — isi manual.";
+      return;
+    }
+    // PDF scan → render & OCR
+    const pg = await pdf.getPage(1);
+    const vp = pg.getViewport({ scale: 2 });
+    const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+    await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    const png = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.9));
+    runOCR(png);
+  } catch (err) {
+    $("#ocrStatus").textContent = "PDF tak dapat dibaca (" + (err && err.message || err) + ") — isi manual.";
+  }
+}
 
 // OCR ringan: English sahaja, gambar kecil & grayscale (jimat memory iPhone)
 let ocrWorker = null;
@@ -157,7 +224,10 @@ function parseReceipt(text) {
   fillCats();
   const yy = +($("#fDate").value || "").slice(0, 4) || year;
   const hit = reliefFor(yy).categories.find(c => c.keywords.some(k => low.includes(k)));
-  if (hit) $("#fCat").value = hit.id;
+  if (hit) { $("#fCat").value = hit.id; fillSubs(); }
+  // Teka sub-had dari teks
+  const subHints = { dental: /dental|gigi|pergigian/, vaccine: /vaksin|vaccin|immuni/, checkup: /check.?up|pemeriksaan|screening|health screen|psych|kaunsel/, upskill: /course|kursus|workshop|certificat|bootcamp|udemy|coursera/, life: /life|takaful|hayat/, epf: /kwsp|epf/, shoes: /shoe|kasut|sneaker|footwear/ };
+  for (const o of $("#fSub").options) if (o.value && subHints[o.value] && subHints[o.value].test(low)) { $("#fSub").value = o.value; break; }
   return found;
 }
 
@@ -180,28 +250,54 @@ function compress(file, max = 1400, q = 0.7, gray = false) {
   });
 }
 
-// ---------- SAVE ----------
+// ---------- SAVE / EDIT ----------
 $("#addForm").onsubmit = async e => {
   e.preventDefault();
+  const old = editingId && receipts.find(r => r.id === editingId);
   const rec = {
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    ...(old || {}),
+    id: old ? old.id : (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
     merchant: $("#fMerchant").value.trim(),
     amount: +$("#fAmount").value,
     date: $("#fDate").value,
     cat: $("#fCat").value,
+    sub: $("#subWrap").classList.contains("hidden") ? "" : $("#fSub").value,
     for: $("#fFor").value,
     note: $("#fNote").value.trim(),
     img: currentImg || null,
-    created: Date.now(),
+    created: old ? old.created : Date.now(),
+    updated: Date.now(),
   };
+  // Gambar ditukar → fail lama dalam Drive ke Trash, upload yang baru
+  if (old && imgChanged) { if (typeof Drive !== "undefined") await Drive.markDeleted(old); delete rec.driveId; }
   await DB.put(rec);
-  receipts.push(rec);
-  e.target.reset(); $("#fDate").valueAsDate = new Date();
-  currentImg = null; DB.setMeta("draftImg", null); $("#preview").classList.add("hidden"); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
-  toast("Resit disimpan ✅");
-  show("dash");
+  if (old) receipts[receipts.indexOf(old)] = rec; else receipts.push(rec);
+  toast(old ? "Resit dikemas kini ✏️" : "Resit disimpan ✅");
+  resetForm();
+  show(old ? "list" : "dash");
   window.afterSave && window.afterSave();
 };
+
+function resetForm() {
+  $("#addForm").reset(); $("#fDate").valueAsDate = new Date(); fillCats();
+  currentImg = null; editingId = null; imgChanged = false; DB.setMeta("draftImg", null);
+  showPreview(); $("#ocrStatus").textContent = ""; $("#fileIn").value = ""; $("#galleryIn").value = "";
+  $("#addTitle").textContent = "Tambah resit"; $("#btnSave").textContent = "💾 Simpan"; $("#btnCancelEdit").classList.add("hidden");
+}
+$("#btnCancelEdit").onclick = () => { resetForm(); show("list"); };
+
+function editReceipt(id) {
+  const r = receipts.find(x => x.id === id); if (!r) return;
+  resetForm();
+  editingId = id; imgChanged = false;
+  $("#fMerchant").value = r.merchant; $("#fAmount").value = r.amount; $("#fDate").value = r.date;
+  fillCats(); $("#fCat").value = r.cat; fillSubs(r.sub || "");
+  $("#fFor").value = r.for; $("#fNote").value = r.note || "";
+  currentImg = r.img || null; showPreview();
+  $("#addTitle").textContent = "✏️ Edit resit"; $("#btnSave").textContent = "💾 Simpan perubahan"; $("#btnCancelEdit").classList.remove("hidden");
+  $("#ocrStatus").textContent = r.img ? "Nak tukar gambar? Pilih yang baru kat atas." : "Boleh tambah gambar/PDF kat atas.";
+  show("add");
+}
 
 // ---------- LIST ----------
 $("#search").oninput = renderList;
@@ -213,8 +309,8 @@ function renderList() {
     .sort((a, b) => b.date.localeCompare(a.date));
   $("#list").innerHTML = yr.length ? yr.map(r => `
     <div class="item">
-      ${r.img ? `<img data-id="${r.id}" class="thumb">` : `<label class="thumb none" title="Tambah gambar">📎<input type="file" accept="image/*" data-attach="${r.id}" hidden></label>`}
-      <div class="info"><b>${esc(r.merchant)}</b><small>${cat(r.cat).icon} ${cat(r.cat).name} · ${r.for} · ${r.date}</small>${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
+      ${r.img ? (isPdf(r.img) ? `<div data-pdf="${r.id}" class="thumb none">📄</div>` : `<img data-id="${r.id}" class="thumb">`) : `<label class="thumb none" title="Tambah gambar">📎<input type="file" accept="image/*,application/pdf" data-attach="${r.id}" hidden></label>`}
+      <div class="info" data-edit="${r.id}"><b>${esc(r.merchant)} <span class="pen">✏️</span></b><small>${cat(r.cat).icon} ${cat(r.cat).name}${r.sub ? " › " + esc(((cat(r.cat).subs || []).find(x => x.id === r.sub) || {}).name || r.sub) : ""} · ${r.for} · ${r.date}</small>${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
       <div class="amt">${fmt(r.amount)}<button class="del" data-id="${r.id}">🗑</button></div>
     </div>`).join("") : `<p class="note">Takde resit lagi untuk YA ${year}.</p>`;
   document.querySelectorAll(".thumb[data-id]").forEach(im => {
@@ -222,10 +318,12 @@ function renderList() {
     im.src = URL.createObjectURL(r.img);
     im.onclick = () => window.open(im.src);
   });
+  document.querySelectorAll("[data-pdf]").forEach(d => d.onclick = () => window.open(URL.createObjectURL(receipts.find(x => x.id === d.dataset.pdf).img)));
+  document.querySelectorAll("[data-edit]").forEach(d => d.onclick = () => editReceipt(d.dataset.edit));
   document.querySelectorAll("[data-attach]").forEach(inp => inp.onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     const r = receipts.find(x => x.id === inp.dataset.attach);
-    r.img = await compress(f, 1400, 0.7); delete r.driveId;
+    r.img = isPdf(f) ? new Blob([await f.arrayBuffer()], { type: "application/pdf" }) : await compress(f, 1400, 0.7); delete r.driveId;
     await DB.put(r); toast("Gambar ditambah 📎"); renderList();
     window.afterSave && window.afterSave();
   });
@@ -241,7 +339,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 $("#btnExport").onclick = async () => {
   if (!window.JSZip) return toast("JSZip tak load — perlukan internet sekali");
   const zip = new JSZip();
-  const data = receipts.map(({ img, ...r }) => ({ ...r, imgFile: img ? `resit/${r.date.slice(0, 4)}/${r.cat}/${r.date}_${slug(r.merchant)}_${r.id.slice(0, 6)}.jpg` : null }));
+  const data = receipts.map(({ img, ...r }) => ({ ...r, imgFile: img ? `resit/${r.date.slice(0, 4)}/${r.cat}/${r.date}_${slug(r.merchant)}_${r.id.slice(0, 6)}.${isPdf(img) ? "pdf" : "jpg"}` : null }));
   receipts.forEach((r, i) => r.img && zip.file(data[i].imgFile, r.img));
   zip.file("data.json", JSON.stringify({ app: "resitku", v: 1, exported: new Date().toISOString(), income: await DB.getMeta("income"), receipts: data }, null, 2));
   zip.file("ringkasan.csv", csv());
@@ -265,7 +363,7 @@ $("#importIn").onchange = async e => {
     if (meta.app !== "resitku") throw 0;
     if (!confirm(`Restore ${meta.receipts.length} resit? Resit sedia ada dengan ID sama akan ditimpa.`)) return;
     for (const r of meta.receipts) {
-      const img = r.imgFile && zip.file(r.imgFile) ? new Blob([await zip.file(r.imgFile).async("arraybuffer")], { type: "image/jpeg" }) : null;
+      const img = r.imgFile && zip.file(r.imgFile) ? new Blob([await zip.file(r.imgFile).async("arraybuffer")], { type: r.imgFile.endsWith(".pdf") ? "application/pdf" : "image/jpeg" }) : null;
       const { imgFile, ...rest } = r;
       await DB.put({ ...rest, img });
     }

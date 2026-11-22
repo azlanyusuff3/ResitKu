@@ -49,27 +49,30 @@
 
   <!-- ADD -->
   <section id="view-add" class="view">
-    <h2>Tambah resit</h2>
+    <h2 id="addTitle">Tambah resit</h2>
     <div class="scanrow">
       <label class="scanbtn">📷 Ambil gambar
         <input type="file" id="fileIn" accept="image/*" capture="environment" hidden>
       </label>
-      <label class="scanbtn alt">🖼️ Pilih dari Gallery
-        <input type="file" id="galleryIn" accept="image/*" hidden>
+      <label class="scanbtn alt">🖼️ Gallery / PDF
+        <input type="file" id="galleryIn" accept="image/*,application/pdf" hidden>
       </label>
     </div>
     <div id="ocrStatus" class="note"></div>
     <img id="preview" class="hidden">
+    <div id="pdfPreview" class="pdfprev hidden"></div>
     <form id="addForm">
       <label>Kedai / penerangan <input id="fMerchant" required></label>
       <label>Amaun (RM) <input id="fAmount" type="number" step="0.01" min="0" required inputmode="decimal"></label>
       <label>Tarikh <input id="fDate" type="date" required></label>
       <label>Kategori <select id="fCat"></select></label>
+      <label id="subWrap" class="hidden">Jenis (sub-had) <select id="fSub"></select></label>
       <label>Untuk siapa <select id="fFor">
         <option>Diri</option><option>Pasangan</option><option>Anak</option><option>Ibu bapa</option>
       </select></label>
       <label>Nota <input id="fNote" placeholder="cth: kasut futsal, ada sijil doktor"></label>
-      <button type="submit">💾 Simpan</button>
+      <button type="submit" id="btnSave">💾 Simpan</button>
+      <button type="button" id="btnCancelEdit" class="btn2 hidden">Batal edit</button>
     </form>
   </section>
 

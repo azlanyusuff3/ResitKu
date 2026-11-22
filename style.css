@@ -70,3 +70,9 @@ nav button span { display: block; font-size: 10px; } nav button.on { color: var(
 .scanbtn.alt { background: linear-gradient(135deg, #0f766e, #14b8a6); }
 
 label.thumb.none { cursor: pointer; }
+
+.pdfprev { background: var(--card); border-radius: 12px; padding: 14px; margin: 8px 0; font-size: 14px; }
+.subs { margin: 2px 0 6px; } .sub { display: flex; justify-content: space-between; font-size: 11px; color: var(--mut); padding: 1px 0; }
+.sub.full { color: #10b981; }
+.over { display: block; color: #b45309; font-size: 11px; margin-bottom: 4px; }
+.info { cursor: pointer; } .pen { font-size: 11px; opacity: .5; }

@@ -75,7 +75,7 @@ const Drive = (() => {
   }
 
   const catName = id => ((window.findCat(id) || {}).name || id).replace(/[\/\\]/g, "-");
-  const fileName = r => `${r.date}_${r.merchant.replace(/[^\w\- ]+/g, "").trim().slice(0, 30) || "resit"}_RM${r.amount.toFixed(2)}_${r.id.slice(0, 6)}.jpg`;
+  const fileName = r => `${r.date}_${r.merchant.replace(/[^\w\- ]+/g, "").trim().slice(0, 30) || "resit"}_RM${r.amount.toFixed(2)}_${r.id.slice(0, 6)}.${r.img && r.img.type === "application/pdf" ? "pdf" : "jpg"}`;
 
   // Upload resit yang belum sync + kemas kini resitku-data.json
   async function sync(receipts, onProgress) {
@@ -85,7 +85,7 @@ const Drive = (() => {
     let n = 0;
     for (const r of pend) {
       const dir = await path(["ResitKu", r.date.slice(0, 4), catName(r.cat)]);
-      r.driveId = await upload(fileName(r), dir, r.img, "image/jpeg");
+      r.driveId = await upload(fileName(r), dir, r.img, r.img.type || "image/jpeg");
       await DB.put(r);
       onProgress && onProgress(++n, pend.length);
     }
