@@ -44,7 +44,7 @@ function renderHome() {
 function newBill() {
   const people = [];
   if (owner.name) people.push({ id: uid(), name: owner.name, owner: true });
-  return { id: uid(), created: Date.now(), shop: "", date: new Date().toISOString().slice(0, 10), people, items: [], svc: 0, sst: 0, rnd: 0, disc: 0, prop: false };
+  return { id: uid(), created: Date.now(), shop: "", date: new Date().toISOString().slice(0, 10), people, items: [], svc: 0, sst: 0, fee: 0, rnd: 0, disc: 0, prop: false };
 }
 
 $("#btnManual").onclick = () => { bill = newBill(); bill.items.push({ id: uid(), name: "", price: 0, who: null }); clearPreview(); $("#ocrStatus").textContent = ""; openEdit(); };
@@ -79,11 +79,11 @@ function applyScan(r) {
   if (r.shop) bill.shop = String(r.shop).slice(0, 60);
   if (r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date)) bill.date = r.date;
   bill.items = (r.items || []).filter(i => i && i.name && +i.price).map(i => ({ id: uid(), name: String(i.name).slice(0, 50), price: toC(i.price), who: null }));
-  bill.svc = toC(r.service); bill.sst = toC(r.sst); bill.rnd = toC(r.rounding); bill.disc = Math.abs(toC(r.discount));
+  bill.svc = toC(r.service); bill.sst = toC(r.sst); bill.fee = toC(r.fee); bill.rnd = toC(r.rounding); bill.disc = Math.abs(toC(r.discount));
   const n = bill.items.length;
   let msg = n ? `✅ Jumpa ${n} item — semak harga & tap siapa makan.` : "😕 Tak jumpa item — key in manual.";
   if (r.total && n) {
-    const tot = bill.items.reduce((s, i) => s + i.price, 0) + bill.svc + bill.sst + bill.rnd - bill.disc;
+    const tot = bill.items.reduce((s, i) => s + i.price, 0) + bill.svc + bill.sst + (bill.fee || 0) + bill.rnd - bill.disc;
     const diff = tot - toC(r.total);
     if (Math.abs(diff) > 1) msg += ` ⚠️ Jumlah kira ${rm(tot)} tak sama dengan resit ${rm(toC(r.total))} — ada yang tersilap baca.`;
   }
@@ -105,29 +105,33 @@ async function tessRead(file) {
 
 function parseText(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-  const out = { shop: "", items: [], service: 0, sst: 0, rounding: 0, discount: 0, total: 0 };
+  const out = { shop: "", items: [], service: 0, sst: 0, fee: 0, rounding: 0, discount: 0, total: 0 };
   const priceRe = /(-?\d{1,5}[.,]\s?\d{2})\s*\)?\s*[A-Z*]{0,2}\s*$/;
   const skip = /sub\s*-?total|grand|total|jumlah|cash|tunai|change|baki|balance|visa|master|card|kad|debit|credit|duitnow|tng|ewallet|paid|bayar|tender|qty|item\(s\)|no\.|no:|tel|invoice|table|tbl|meja|pax|receipt|resit|gst\s*reg|sst\s*(reg|no|id|:)|tin|date|time|cashier|ord#/i;
   const payRe = /credit|debit|visa|master|card|kad|duitnow|tng|e-?wallet|grab\s*pay|boost|shopee\s*pay/i;
   // jenis caj ikut label (tax dulu, sebab "Service Tax" pun ada perkataan "service")
-  const kind = l => /incl|termasuk|prices/i.test(l) ? null
+  const kind = l => /incl|termasuk|inclusive/i.test(l) && !/total/i.test(l) ? "ignore"   // "Incl. Tax" = dah termasuk harga
+    : /grand\s*total|^total|net\s*total|jumlah\s*(besar|bersih)?$|amount\s*due/i.test(l) ? "total"
+    : /prices/i.test(l) ? null
     : /sst|gst|tax|cukai/i.test(l) ? "sst"
+    : /deliver|penghantaran|platform|packag|bungkus|small\s*order|booking|convenience|fee\b|caj\s*lain/i.test(l) ? "fee"
     : /serv|svc|s\/c|s\.c\.|caj\s*perkhid/i.test(l) ? "service"
     : /round|bundar/i.test(l) ? "rounding"
-    : /disc|diskaun|promo|voucher|less/i.test(l) ? "discount"
-    : /grand\s*total|^total|net\s*total|jumlah\s*(besar|bersih)?$|amount\s*due/i.test(l) ? "total" : null;
+    : /disc|diskaun|promo|voucher|less/i.test(l) ? "discount" : null;
   let pending = null; // label caj yang amaunnya turun ke baris bawah
   for (const l of lines) {
     const m = l.match(priceRe);
     if (!m) {
       pending = kind(l);
-      if (!pending && !out.shop && /[a-z]{3}/i.test(l) && out.items.length === 0 && l.length < 40 && !skip.test(l)) out.shop = l.replace(/[^\w\s&'.-]/g, "").trim();
+      if (!pending && !out.shop && /[a-z]{3}/i.test(l) && out.items.length === 0 && l.length < 40 && !skip.test(l) && !/order|summary|preparing|your|pesanan|delivered|status|tax invoice/i.test(l)) out.shop = l.replace(/[^\w\s&'.-]/g, "").trim();
       continue;
     }
     const v = Math.abs(parseFloat(m[1].replace(/\s/g, "").replace(",", ".")));
     let head = l.slice(0, m.index).trim();
     const k = kind(l) || (pending && !/[a-z]{2}/i.test(head) ? pending : null);
     pending = null;
+    if (k === "ignore") continue;
+    if (k === "fee") { out.fee = (out.fee || 0) + v; continue; }
     if (k === "service") { out.service = v; continue; }
     if (k === "sst") { out.sst = v; continue; }
     if (k === "rounding") { out.rounding = /-/.test(m[1]) ? -v : v; continue; }
@@ -151,9 +155,9 @@ async function geminiRead(file, key) {
   const blob = await shrink(file, 1600, false);
   const b64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(",")[1]); fr.readAsDataURL(blob); });
   const prompt = `Baca resit restoran ni. Pulangkan JSON sahaja:
-{"shop":string,"date":"YYYY-MM-DD" atau "","items":[{"name":string,"price":number}],"service":number,"sst":number,"rounding":number,"discount":number,"total":number}
+{"shop":string,"date":"YYYY-MM-DD" atau "","items":[{"name":string,"price":number}],"service":number,"sst":number,"fee":number,"rounding":number,"discount":number,"total":number}
 - price = harga baris (qty x harga seunit) sebelum tax. Satu baris = satu item; kalau qty > 1 masukkan qty dalam nama, cth "Teh Tarik x2".
-- service = service charge. sst = SST/GST/service tax. rounding boleh negatif. discount nombor positif.
+- service = service charge. sst = SST/GST/service tax yang DITAMBAH atas harga (kalau resit tulis "Incl. Tax" / termasuk, letak 0). fee = delivery fee + platform/packaging/small order fee. rounding boleh negatif. discount nombor positif.
 - Jangan masukkan subtotal/total/bayaran/baki sebagai item. Guna 0 kalau tiada.`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -190,7 +194,7 @@ const color = i => COLORS[i % COLORS.length];
 function renderEdit() {
   const b = bill;
   $("#bShop").value = b.shop; $("#bDate").value = b.date;
-  ["svc", "sst", "rnd", "disc"].forEach(k => { const el = $("#c" + k[0].toUpperCase() + k.slice(1)); el.value = b[k] ? (b[k] / 100).toFixed(2) : ""; });
+  ["svc", "sst", "fee", "rnd", "disc"].forEach(k => { const el = $("#c" + k[0].toUpperCase() + k.slice(1)); el.value = b[k] ? (b[k] / 100).toFixed(2) : ""; });
   $("#propTax").checked = !!b.prop;
   $("#btnDelBill").classList.toggle("hidden", !bills.some(x => x.id === b.id));
   renderPeople(); renderItems(); renderSum();
@@ -259,7 +263,7 @@ $("#btnAddItem").onclick = () => { bill.items.push({ id: uid(), name: "", price:
 
 $("#bShop").oninput = e => bill.shop = e.target.value;
 $("#bDate").oninput = e => bill.date = e.target.value;
-[["#cSvc", "svc"], ["#cSst", "sst"], ["#cRnd", "rnd"], ["#cDisc", "disc"]].forEach(([s, k]) => $(s).oninput = e => { bill[k] = k === "disc" ? Math.abs(toC(e.target.value)) : toC(e.target.value); renderSum(); });
+[["#cFee", "fee"], ["#cSvc", "svc"], ["#cSst", "sst"], ["#cRnd", "rnd"], ["#cDisc", "disc"]].forEach(([s, k]) => $(s).oninput = e => { bill[k] = k === "disc" ? Math.abs(toC(e.target.value)) : toC(e.target.value); renderSum(); });
 $("#propTax").onchange = e => { bill.prop = e.target.checked; renderSum(); };
 $$("[data-pct]").forEach(b => b.onclick = () => {
   const [sc, st] = b.dataset.pct.split(",").map(Number);
@@ -277,7 +281,7 @@ function calc(b) {
   const sub = {}; b.people.forEach(p => sub[p.id] = 0);
   let subtotal = 0, unassigned = 0;
   b.items.forEach(it => { subtotal += it.price; if (it.who && it.who in sub) sub[it.who] += it.price; else unassigned += it.price; });
-  const charges = b.svc + b.sst + b.rnd - b.disc;
+  const charges = b.svc + b.sst + (b.fee || 0) + b.rnd - b.disc;
   const assigned = subtotal - unassigned;
   // bahagi caj dalam sen, baki sen diagih supaya jumlah tepat
   const raw = b.people.map(p => n ? (b.prop && assigned > 0 ? charges * sub[p.id] / assigned : charges / n) : 0);
@@ -345,6 +349,7 @@ $("#btnShareText").onclick = async () => {
   t += `Subtotal ${rm(r.subtotal)}`;
   if (bill.svc) t += ` · Service ${rm(bill.svc)}`;
   if (bill.sst) t += ` · SST ${rm(bill.sst)}`;
+  if (bill.fee) t += ` · Delivery/fee ${rm(bill.fee)}`;
   if (bill.rnd) t += ` · Rounding ${rm(bill.rnd)}`;
   if (bill.disc) t += ` · Diskaun -${rm(bill.disc)}`;
   t += `\n*Jumlah: ${rm(r.total)}* · ${r.n} orang\n`;
@@ -433,6 +438,7 @@ async function drawReceipt(r, who) {
     row("Subtotal", rm(r.subtotal), { size: 16, color: "#555", h: 25 });
     if (bill.svc) row("Service charge", rm(bill.svc), { size: 16, color: "#555", h: 25 });
     if (bill.sst) row("SST", rm(bill.sst), { size: 16, color: "#555", h: 25 });
+    if (bill.fee) row("Delivery / fee", rm(bill.fee), { size: 16, color: "#555", h: 25 });
     if (bill.rnd) row("Rounding", rm(bill.rnd), { size: 16, color: "#555", h: 25 });
     if (bill.disc) row("Diskaun", "-" + rm(bill.disc), { size: 16, color: "#555", h: 25 });
     dash(true);
