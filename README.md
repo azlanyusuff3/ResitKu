@@ -8,6 +8,11 @@ PWA local-first untuk jejak resit relief cukai LHDN.
 - **Countdown 31 Dis** + amaran kalau lama tak backup.
 - **Backup ZIP** (data.json + gambar ikut folder tahun/kategori + CSV), simpan di mana-mana (Drive, OneDrive, WhatsApp...). Restore bila tukar phone.
 
+## ➗ SplitLah (`/splitlah/`)
+Split bil makan: snap resit → tap siapa makan setiap item → caj & tax bahagi sama rata (atau ikut proportion) → share gambar resit siap QR DuitNow owner.
+- Takde login, data dalam phone. OCR Tesseract (free); letak Gemini API key dalam Tetapan untuk bacaan lebih tepat.
+- Owner upload QR DuitNow sekali — app decode & lukis semula QR dengan kemas dalam resit.
+
 ## Update had relief
 Edit `reliefs.js` je setiap Belanjawan baru.
 

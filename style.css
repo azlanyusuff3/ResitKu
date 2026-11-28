@@ -179,3 +179,6 @@ table.be .betot td { color: var(--gold2); font-weight: 800; font-size: 15px; bor
 .wlist { list-style: none; padding: 16px; margin: 0 0 22px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); text-align: left; font-size: 14px; line-height: 2.1; }
 .gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f1f1f !important; border: 1px solid #dadce0; }
 .gbtn .g { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0); font-size: 13px; }
+
+/* Tukar app: ResitKu ⇄ SplitLah */
+.appswitch { font-size: 12px; font-weight: 700; text-decoration: none; padding: 7px 12px; border-radius: 99px; background: var(--card); color: var(--tx); border: 1px solid var(--line); white-space: nowrap; }

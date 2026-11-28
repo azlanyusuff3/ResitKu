@@ -1,0 +1,64 @@
+/* SplitLah — guna tema ResitKu (../style.css), tambahan sahaja */
+.switch { font-size: 12px; font-weight: 700; text-decoration: none; padding: 7px 12px; border-radius: 99px; background: var(--card); color: var(--tx); border: 1px solid var(--line); }
+.sl nav button { max-width: 200px; margin: 0 auto; }
+.scanrow.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.slprev { width: 100%; max-height: 220px; object-fit: contain; border-radius: 14px; background: var(--card); margin-bottom: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sl label:not(.scanbtn):not(.chk) { display: block; margin: 10px 0; font-size: 12px; font-weight: 600; color: var(--mut); }
+.cnt { color: var(--gold); text-transform: none; letter-spacing: 0; }
+
+/* Orang */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; width: auto; margin: 0; padding: 8px 12px; font-size: 13px; font-weight: 600; border-radius: 99px; background: var(--card); color: var(--tx); border: 1px solid var(--line); }
+.chip .dot { width: 10px; height: 10px; border-radius: 50%; }
+.chip .x { color: var(--mut); font-size: 12px; margin-left: 2px; }
+.addrow { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.addrow input { margin: 0; }
+button.mini { width: 52px; flex: none; margin: 0; padding: 13px 0; font-size: 18px; }
+.mini2 { width: auto; display: inline-block; padding: 9px 12px; font-size: 12px; margin: 8px 6px 0 0; }
+.quickppl, .pctrow { margin-top: 2px; }
+
+/* Item */
+.item2 { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+.item2.none { border-color: rgba(255,181,71,.45); }
+.irow { display: flex; gap: 8px; align-items: center; }
+.irow input { margin: 0; padding: 10px 11px; font-size: 15px; }
+.irow .iname { flex: 1; }
+.irow .iprice { width: 96px; flex: none; text-align: right; }
+.irow .idel { width: 36px; flex: none; margin: 0; padding: 8px 0; background: none; color: var(--mut); font-size: 15px; }
+.who { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.who button { width: auto; margin: 0; padding: 6px 11px; font-size: 12px; font-weight: 600; border-radius: 99px; background: transparent; color: var(--mut); border: 1px solid var(--line); }
+.who button.on { color: #0a0a0c; border-color: transparent; }
+.who .hint { font-size: 12px; color: var(--warn); padding: 6px 0; }
+
+.charges { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.sumbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 4px; }
+.sumbar > div { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.sumbar small { display: block; color: var(--mut); font-size: 11px; }
+.sumbar b { font-size: 16px; }
+.sumbar > div:last-child b { color: var(--gold); }
+.danger { color: var(--bad) !important; }
+
+/* Hasil */
+.restop { background: radial-gradient(120% 140% at 100% 0%, rgba(232,184,74,.22), transparent 55%), var(--card); border: 1px solid rgba(232,184,74,.25); border-radius: 22px; padding: 18px; margin-bottom: 12px; }
+.restop small { color: var(--mut); font-size: 12px; }
+.pcard { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 10px; }
+.phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.phead .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.phead .nm .dot { width: 12px; height: 12px; border-radius: 50%; }
+.phead .amt { font-size: 22px; font-weight: 800; letter-spacing: -.4px; }
+.pdet { font-size: 12px; color: var(--mut); margin: 8px 0 4px; line-height: 1.7; }
+.pdet .l { display: flex; justify-content: space-between; gap: 10px; }
+.pcard button { margin: 8px 0 0; padding: 11px; font-size: 13px; }
+.pcard.owner { opacity: .75; }
+.hist { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; }
+.hist small { color: var(--mut); display: block; font-size: 11px; margin-top: 2px; }
+.hist b { white-space: nowrap; }
+
+.qrbox { display: flex; justify-content: center; }
+.qrbox img, .qrbox canvas { width: 180px; height: 180px; background: #fff; padding: 10px; border-radius: 14px; image-rendering: pixelated; margin: 6px 0; }
+.qrbox img.raw { object-fit: contain; image-rendering: auto; }
+.shimg { width: 100%; border-radius: 10px; max-height: 60vh; object-fit: contain; background: #e9e9ee; }
+.sl .chip, .sl .idel { color: var(--tx) !important; }
+.sl .chip .x, .sl .who button:not(.on) { color: var(--mut) !important; }
+.sl .who button.on { color: #0a0a0c !important; }
