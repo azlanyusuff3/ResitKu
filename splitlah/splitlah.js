@@ -106,21 +106,42 @@ async function tessRead(file) {
 function parseText(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const out = { shop: "", items: [], service: 0, sst: 0, rounding: 0, discount: 0, total: 0 };
-  const priceRe = /(-?\d{1,5}[.,]\s?\d{2})\s*[A-Z*]{0,2}\s*$/;
-  const skip = /sub\s*-?total|grand|total|jumlah|cash|tunai|change|baki|balance|visa|master|card|kad|debit|credit|duitnow|tng|ewallet|paid|bayar|tender|qty|item\(s\)|no\.|tel|invoice|table|meja|pax|receipt|resit|gst\s*reg|sst\s*(reg|no|id)|tin|date|time|cashier/i;
+  const priceRe = /(-?\d{1,5}[.,]\s?\d{2})\s*\)?\s*[A-Z*]{0,2}\s*$/;
+  const skip = /sub\s*-?total|grand|total|jumlah|cash|tunai|change|baki|balance|visa|master|card|kad|debit|credit|duitnow|tng|ewallet|paid|bayar|tender|qty|item\(s\)|no\.|no:|tel|invoice|table|tbl|meja|pax|receipt|resit|gst\s*reg|sst\s*(reg|no|id|:)|tin|date|time|cashier|ord#/i;
+  const payRe = /credit|debit|visa|master|card|kad|duitnow|tng|e-?wallet|grab\s*pay|boost|shopee\s*pay/i;
+  // jenis caj ikut label (tax dulu, sebab "Service Tax" pun ada perkataan "service")
+  const kind = l => /incl|termasuk|prices/i.test(l) ? null
+    : /sst|gst|tax|cukai/i.test(l) ? "sst"
+    : /serv|svc|s\/c|s\.c\.|caj\s*perkhid/i.test(l) ? "service"
+    : /round|bundar/i.test(l) ? "rounding"
+    : /disc|diskaun|promo|voucher|less/i.test(l) ? "discount"
+    : /grand\s*total|^total|net\s*total|jumlah\s*(besar|bersih)?$|amount\s*due/i.test(l) ? "total" : null;
+  let pending = null; // label caj yang amaunnya turun ke baris bawah
   for (const l of lines) {
     const m = l.match(priceRe);
-    if (!m) { if (!out.shop && /[a-z]{3}/i.test(l) && out.items.length === 0 && l.length < 40) out.shop = l.replace(/[^\w\s&'.-]/g, "").trim(); continue; }
+    if (!m) {
+      pending = kind(l);
+      if (!pending && !out.shop && /[a-z]{3}/i.test(l) && out.items.length === 0 && l.length < 40 && !skip.test(l)) out.shop = l.replace(/[^\w\s&'.-]/g, "").trim();
+      continue;
+    }
     const v = Math.abs(parseFloat(m[1].replace(/\s/g, "").replace(",", ".")));
-    const name = l.slice(0, m.index).replace(/^\d+\s*[xX@]?\s*(\d+[.,]\d{2}\s+)?/, "").replace(/\s+\d+\s*[xX@]\s*[\d.,]+\s*$/, "").replace(/[|_~=]+/g, " ").trim();
-    if (/serv|svc|s\/c|s\.c\.|caj\s*perkhid/i.test(l)) { out.service = v; continue; }
-    if (/sst|gst|service\s*tax|tax|cukai/i.test(l) && !/incl|termasuk/i.test(l)) { out.sst = v; continue; }
-    if (/round|bundar/i.test(l)) { out.rounding = /-/.test(m[1]) ? -v : v; continue; }
-    if (/disc|diskaun|promo|voucher|less/i.test(l)) { out.discount = v; continue; }
-    if (/grand\s*total|^total|net\s*total|jumlah\s*(besar|bersih)?$|amount\s*due/i.test(l)) { out.total = Math.max(out.total, v); continue; }
+    let head = l.slice(0, m.index).trim();
+    const k = kind(l) || (pending && !/[a-z]{2}/i.test(head) ? pending : null);
+    pending = null;
+    if (k === "service") { out.service = v; continue; }
+    if (k === "sst") { out.sst = v; continue; }
+    if (k === "rounding") { out.rounding = /-/.test(m[1]) ? -v : v; continue; }
+    if (k === "discount") { out.discount = v; continue; }
+    if (k === "total") { out.total = Math.max(out.total, v); continue; }
+    if (payRe.test(l)) { if (!out.total) out.total = v; continue; }
     if (skip.test(l)) continue;
-    if (name.length < 2 || !/[a-z]{2}/i.test(name) || v <= 0 || v > 5000) continue;
-    out.items.push({ name, price: v });
+    // buang qty: "2 x 2.80 Teh" di depan, atau lajur qty "C Rice 1   2" di belakang
+    let qty = 1;
+    head = head.replace(/^(\d{1,2})\s*[xX@]\s*(\d+[.,]\d{2}\s+)?/, (_, q) => { qty = +q; return ""; });
+    head = head.replace(/\s+(\d{1,2}|[lI|])\s*$/, (_, q) => { if (/\d/.test(q)) qty = +q; return ""; });
+    head = head.replace(/\s+\d+\s*[xX@]\s*[\d.,]+\s*$/, "").replace(/[|_~=]+/g, " ").replace(/\s{2,}/g, " ").trim();
+    if (head.length < 2 || !/[a-z]{2}/i.test(head) || v <= 0 || v > 5000) continue;
+    out.items.push({ name: qty > 1 ? `${head} x${qty}` : head, price: v });
   }
   return out;
 }
@@ -320,10 +341,28 @@ $("#btnHome").onclick = () => show("home");
 $("#btnShareAll").onclick = () => openShare(null);
 $("#btnShareText").onclick = async () => {
   const r = calc(bill);
-  let t = `🧾 *${bill.shop}* (${fmtDate(bill.date)})\nJumlah: ${rm(r.total)} · ${r.n} orang\n\n`;
-  r.per.forEach(x => { t += `• ${x.p.name}: *${rm(x.total)}*${x.p.owner ? " (dah bayar)" : ""}\n`; });
+  let t = `🧾 *${bill.shop}* (${fmtDate(bill.date)})\n`;
+  t += `Subtotal ${rm(r.subtotal)}`;
+  if (bill.svc) t += ` · Service ${rm(bill.svc)}`;
+  if (bill.sst) t += ` · SST ${rm(bill.sst)}`;
+  if (bill.rnd) t += ` · Rounding ${rm(bill.rnd)}`;
+  if (bill.disc) t += ` · Diskaun -${rm(bill.disc)}`;
+  t += `\n*Jumlah: ${rm(r.total)}* · ${r.n} orang\n`;
+  t += bill.prop ? `Caj ${rm(r.charges)} ikut proportion makanan\n` : `Caj ${rm(r.charges)} ÷ ${r.n} orang\n`;
+  r.per.forEach(x => {
+    t += `\n👤 *${x.p.name}: ${rm(x.total)}*${x.p.owner ? " (dah bayar)" : ""}\n`;
+    x.items.forEach(i => { t += `   • ${i.name} ${rm(i.price)}\n`; });
+    t += `   • Caj & tax ${rm(x.share)}\n`;
+  });
   if (payName()) t += `\nBayar kepada ${payName()} 🙏`;
   t += `\n_SplitLah_`;
+  // cuba hantar gambar resit penuh sekali dengan teks
+  try {
+    const cv = await drawReceipt(r, null);
+    const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+    const f = new File([blob], "SplitLah-semua.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [f], text: t })) { await navigator.share({ files: [f], text: t }); return; }
+  } catch (e) { if (e.name === "AbortError") return; }
   if (navigator.share) { try { await navigator.share({ text: t }); return; } catch (e) { if (e.name === "AbortError") return; } }
   location.href = "https://wa.me/?text=" + encodeURIComponent(t);
 };
