@@ -182,3 +182,11 @@ table.be .betot td { color: var(--gold2); font-weight: 800; font-size: 15px; bor
 
 /* Tukar app: ResitKu ⇄ SplitLah */
 .appswitch { font-size: 12px; font-weight: 700; text-decoration: none; padding: 7px 12px; border-radius: 99px; background: var(--card); color: var(--tx); border: 1px solid var(--line); white-space: nowrap; }
+
+/* Skrin pilih app */
+.picker .wbox h1 { margin-bottom: 4px; }
+.pick { display: flex; align-items: center; gap: 14px; text-align: left; text-decoration: none; color: var(--tx); background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px; margin: 12px 0; transition: transform .12s; }
+.pick:active { transform: scale(.98); }
+.pick .pi { font-size: 30px; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px; background: var(--goldbg); flex: none; }
+.pick b { display: block; font-size: 17px; }
+.pick small { color: var(--mut); font-size: 13px; }
